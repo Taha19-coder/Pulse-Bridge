@@ -57,7 +57,7 @@ export interface DoctorSearchQuery {
 export interface DoctorSearchResponse {
   total_found: number;
   query_interpreted: string;
-  applied_filters: Record<string, any>;
+  applied_filters: Record<string, unknown>;
   grounded_summary: string;
   doctors: VerifiedDoctor[];
 }
@@ -124,10 +124,29 @@ export interface BloodRequestCreate {
   contact_phone: string;
 }
 
+export interface BloodRequestResponse {
+  id: string;
+  request_code: string;
+  patient_name: string;
+  blood_group_needed: string;
+  units_required: number;
+  city: string;
+  hospital_name: string;
+  urgency_level: string;
+  contact_person: string;
+  contact_phone: string;
+  request_status: string;
+  created_at: string;
+}
+
 export interface SystemHealthResponse {
   status: string;
   version: string;
   supabase_configured: boolean;
   gemini_configured: boolean;
   missing_configurations: string[];
+}
+
+export interface DoctorAssistantChatResponse {
+  reply: string;
 }

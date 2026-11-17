@@ -1,8 +1,11 @@
 import os
 import uuid
-import pandas as pd
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+
+import pandas as pd
+
 from backend.core.config import settings
 from backend.core.supabase_client import get_supabase_client
 from backend.models.schemas import (
@@ -16,6 +19,23 @@ from backend.modules.donors.matcher import rank_and_format_donors, normalize_pak
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 CSV_PATH = DATA_DIR / "blood_donors.csv"
+DONOR_REGISTRY_CSV_PATH = DATA_DIR / "donor_registrations.csv"
+DONOR_REGISTRY_XLSX_PATH = DATA_DIR / "donor_registrations.xlsx"
+DONOR_REGISTRY_COLUMNS = [
+    "donor_code",
+    "full_name",
+    "age",
+    "gender",
+    "blood_group",
+    "city",
+    "area",
+    "full_address",
+    "contact_number",
+    "availability_status",
+    "last_donation_date",
+    "user_id",
+    "registered_at",
+]
 
 
 def load_seed_donors_from_csv() -> List[Dict[str, Any]]:
@@ -45,6 +65,40 @@ def load_seed_donors_from_csv() -> List[Dict[str, Any]]:
 
 class BloodDonorService:
     @staticmethod
+    def _ensure_local_registry_files() -> None:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+        if not DONOR_REGISTRY_CSV_PATH.exists() or DONOR_REGISTRY_CSV_PATH.stat().st_size == 0:
+            pd.DataFrame(columns=DONOR_REGISTRY_COLUMNS).to_csv(DONOR_REGISTRY_CSV_PATH, index=False)
+
+        try:
+            if not DONOR_REGISTRY_XLSX_PATH.exists():
+                pd.read_csv(DONOR_REGISTRY_CSV_PATH).to_excel(DONOR_REGISTRY_XLSX_PATH, index=False)
+        except Exception as exc:
+            print(f"[BloodDonorService] Temporary Excel registry unavailable: {exc}")
+
+    @staticmethod
+    def _persist_local_registry_record(record: Dict[str, Any]) -> None:
+        BloodDonorService._ensure_local_registry_files()
+
+        try:
+            if DONOR_REGISTRY_CSV_PATH.exists() and DONOR_REGISTRY_CSV_PATH.stat().st_size > 0:
+                donor_df = pd.read_csv(DONOR_REGISTRY_CSV_PATH)
+            else:
+                donor_df = pd.DataFrame(columns=DONOR_REGISTRY_COLUMNS)
+        except Exception:
+            donor_df = pd.DataFrame(columns=DONOR_REGISTRY_COLUMNS)
+
+        donor_row = {column: record.get(column, "") for column in DONOR_REGISTRY_COLUMNS}
+        donor_df = pd.concat([donor_df, pd.DataFrame([donor_row])], ignore_index=True)
+        donor_df.to_csv(DONOR_REGISTRY_CSV_PATH, index=False)
+
+        try:
+            donor_df.to_excel(DONOR_REGISTRY_XLSX_PATH, index=False)
+        except Exception as exc:
+            print(f"[BloodDonorService] Could not refresh donor registry workbook: {exc}")
+
+    @staticmethod
     def match_donors(request: BloodMatchRequest) -> BloodMatchResponse:
         """
         Retrieves donors from Supabase (or seed CSV if Supabase is initializing).
@@ -70,7 +124,7 @@ class BloodDonorService:
     @staticmethod
     def register_donor(data: DonorRegistrationRequest, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Registers a new voluntary donor in Supabase.
+        Registers a new voluntary donor in Supabase and keeps a temporary local spreadsheet backup.
         """
         normalized_phone = normalize_pakistan_phone(data.contact_number)
         donor_code = f"PKD{uuid.uuid4().hex[:6].upper()}"
@@ -87,17 +141,21 @@ class BloodDonorService:
             "contact_number": normalized_phone,
             "availability_status": data.availability,
             "last_donation_date": data.last_donation_date,
-            "user_id": user_id
+            "user_id": user_id,
+            "registered_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
 
         try:
             supabase = get_supabase_client()
             res = supabase.table("donors").insert(record).execute()
             if res.data:
-                return res.data[0]
+                saved_record = dict(res.data[0])
+                BloodDonorService._persist_local_registry_record(saved_record)
+                return saved_record
         except Exception as e:
             print(f"[BloodDonorService] Notice: Supabase insert deferred ({e})")
 
+        BloodDonorService._persist_local_registry_record(record)
         return record
 
     @staticmethod

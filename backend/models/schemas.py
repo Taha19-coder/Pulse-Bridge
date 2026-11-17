@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ------------------------------------------------------------------------------
@@ -11,6 +11,22 @@ class SystemHealthResponse(BaseModel):
     supabase_configured: bool
     gemini_configured: bool
     missing_configurations: List[str] = []
+
+
+class DoctorAssistantChatRequest(BaseModel):
+    user_message: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("user_message")
+    @classmethod
+    def strip_user_message(cls, value: str) -> str:
+        message = value.strip()
+        if not message:
+            raise ValueError("Message cannot be blank.")
+        return message
+
+
+class DoctorAssistantChatResponse(BaseModel):
+    reply: str = Field(min_length=1)
 
 
 # ------------------------------------------------------------------------------

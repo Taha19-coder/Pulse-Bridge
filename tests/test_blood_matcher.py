@@ -1,7 +1,10 @@
+import pandas as pd
 import pytest
+
+from backend.models.schemas import BloodMatchRequest, DonorRegistrationRequest
+from backend.modules.donors import service as donor_service_module
 from backend.modules.donors.compatibility import get_compatible_donor_groups, is_compatible
 from backend.modules.donors.service import BloodDonorService
-from backend.models.schemas import BloodMatchRequest
 
 
 def test_compatibility_rules():
@@ -31,3 +34,32 @@ def test_donor_search_and_privacy_masking():
         assert "•••••" in donor.masked_contact or "•••" in donor.masked_contact
         # Check WhatsApp link is generated
         assert donor.whatsapp_link.startswith("https://wa.me/")
+
+
+def test_donor_registration_creates_local_registry_backup(tmp_path, monkeypatch):
+    csv_path = tmp_path / "donor_registrations.csv"
+    xlsx_path = tmp_path / "donor_registrations.xlsx"
+    monkeypatch.setattr(donor_service_module, "DONOR_REGISTRY_CSV_PATH", csv_path)
+    monkeypatch.setattr(donor_service_module, "DONOR_REGISTRY_XLSX_PATH", xlsx_path)
+
+    data = DonorRegistrationRequest(
+        full_name="Ali Khan",
+        age=30,
+        gender="Male",
+        blood_group="O-",
+        city="Lahore",
+        area="Gulberg",
+        address="12 Main Street",
+        contact_number="923001234567",
+        availability="Available",
+    )
+
+    saved = BloodDonorService.register_donor(data)
+
+    assert saved["full_name"] == "Ali Khan"
+    assert csv_path.exists()
+    assert xlsx_path.exists()
+
+    csv_df = pd.read_csv(csv_path)
+    assert csv_df.iloc[-1]["full_name"] == "Ali Khan"
+    assert csv_df.iloc[-1]["blood_group"] == "O-"

@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Activity, ShieldCheck, HeartPulse, Globe2, AlertCircle } from 'lucide-react';
-import { checkHealth } from '@/lib/api';
+import Image from 'next/image';
+import { Droplets, FileText, House, Info, Stethoscope } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
@@ -11,118 +10,98 @@ interface NavbarProps {
   setLanguage: (lang: 'en' | 'ur') => void;
 }
 
+const navItems = [
+  { key: 'home', label: 'Home', icon: House },
+  { key: 'reports', label: 'Reports', icon: FileText },
+  { key: 'doctors', label: 'Doctors', icon: Stethoscope },
+  { key: 'blood', label: 'Blood support', icon: Droplets },
+  { key: 'about', label: 'About', icon: Info },
+];
+
 export default function Navbar({ activeTab, setActiveTab, language, setLanguage }: NavbarProps) {
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'healthy' | 'offline'>('checking');
-
-  useEffect(() => {
-    checkHealth()
-      .then(() => setBackendStatus('healthy'))
-      .catch(() => setBackendStatus('offline'));
-  }, []);
-
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo and Brand */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('home')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-teal-500/20">
-              <HeartPulse className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-xl tracking-tight text-slate-900">
-                  PULSE<span className="text-teal-600">BRIDGE</span>
-                </span>
-                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  SDG 3
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 tracking-wide font-medium">
-                AI HEALTHCARE ACCESSIBILITY PLATFORM
-              </p>
-            </div>
-          </div>
+    <header className="sticky top-0 z-50 px-3 pt-3 text-[#183f5b] sm:px-5">
+      <div className="navbar-glass mx-auto max-w-[1500px] overflow-hidden rounded-[1.75rem] border border-white/60 px-4 shadow-[0_8px_32px_rgba(20,54,76,0.12)] backdrop-blur-2xl sm:px-6 lg:px-8">
+        <div className="flex min-h-[72px] items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('home')}
+            className="flex shrink-0 items-center rounded-xl focus:outline-none focus:ring-2 focus:ring-[#d4f36b]"
+            aria-label="Pulse Bridge home"
+          >
+            <Image
+              src="/images/pulse-bridge-logo.png"
+              alt="Pulse Bridge"
+              width={425}
+              height={185}
+              priority
+              className="h-[50px] w-auto object-contain sm:h-[58px]"
+            />
+          </button>
 
-          {/* Navigation Items */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'reports'
-                  ? 'bg-white text-teal-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Report Explainer
-            </button>
-            <button
-              onClick={() => setActiveTab('doctors')}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'doctors'
-                  ? 'bg-white text-teal-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Doctor Finder
-            </button>
-            <button
-              onClick={() => setActiveTab('blood')}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'blood'
-                  ? 'bg-white text-rose-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Blood Network
-            </button>
+          <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
+            {navItems.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                aria-current={activeTab === key ? 'page' : undefined}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition lg:px-3.5 ${
+                  activeTab === key
+                    ? 'bg-[#d4f36b] text-[#183f5b]'
+                    : 'text-[#183f5b]/80 hover:bg-slate-900/5 hover:text-[#183f5b]'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
           </nav>
 
-          {/* Right Actions: Language Switch & Status */}
-          <div className="flex items-center gap-3">
-            {/* Language Selector */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs font-medium">
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-0.5 rounded-full border border-[#183f5b]/10 bg-white/50 p-1">
               <button
+                type="button"
                 onClick={() => setLanguage('en')}
-                className={`px-2.5 py-1 rounded-md transition-colors ${
-                  language === 'en' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500'
+                aria-pressed={language === 'en'}
+                className={`rounded-full px-2.5 py-1.5 text-[10px] font-bold transition ${
+                  language === 'en' ? 'bg-[#183f5b] text-white' : 'text-[#183f5b]/75 hover:text-[#183f5b]'
                 }`}
               >
                 EN
               </button>
               <button
+                type="button"
                 onClick={() => setLanguage('ur')}
-                className={`px-2.5 py-1 rounded-md transition-colors ${
-                  language === 'ur' ? 'bg-white text-teal-700 shadow-xs font-bold' : 'text-slate-500'
+                aria-pressed={language === 'ur'}
+                className={`rounded-full px-2.5 py-1.5 text-xs font-bold transition ${
+                  language === 'ur' ? 'bg-[#d4f36b] text-[#183f5b]' : 'text-[#183f5b]/75 hover:text-[#183f5b]'
                 }`}
               >
                 اردو
               </button>
             </div>
-
-            {/* Backend Health Badge */}
-            <div
-              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                backendStatus === 'healthy'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : backendStatus === 'checking'
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : 'bg-rose-50 text-rose-700 border-rose-200'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  backendStatus === 'healthy'
-                    ? 'bg-emerald-500'
-                    : backendStatus === 'checking'
-                    ? 'bg-amber-500 animate-pulse'
-                    : 'bg-rose-500'
-                }`}
-              />
-              {backendStatus === 'healthy' ? 'API Online' : backendStatus === 'checking' ? 'Connecting...' : 'API Offline'}
-            </div>
           </div>
         </div>
+
+        <nav aria-label="Mobile navigation" className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 md:hidden sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          {navItems.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              aria-current={activeTab === key ? 'page' : undefined}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-semibold transition ${
+                activeTab === key
+                  ? 'bg-[#d4f36b] text-[#183f5b]'
+                  : 'text-[#183f5b]/80 hover:bg-slate-900/5 hover:text-[#183f5b]'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
     </header>
   );

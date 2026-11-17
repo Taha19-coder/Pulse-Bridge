@@ -1,7 +1,11 @@
-from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+import logging
+from typing import List
+import httpx
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from backend.core.config import settings
 from backend.models.schemas import (
+    DoctorAssistantChatRequest,
+    DoctorAssistantChatResponse,
     SystemHealthResponse,
     ReportExplanationResponse,
     DoctorSearchQuery,
@@ -16,13 +20,69 @@ from backend.models.schemas import (
 from backend.modules.report.explainer import ReportExplainerService
 from backend.modules.donors.service import BloodDonorService
 from backend.modules.doctors.synthesizer import DoctorRAGService
+from backend.modules.doctors.gemini_client import call_gemini_chat
+from backend.modules.doctors.nvidia_client import call_nvidia_chat
 
 router = APIRouter(prefix="/api/v1")
+logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------------------
-# 1. SYSTEM HEALTH
-# ------------------------------------------------------------------------------
+@router.post(
+    "/rag/chat",
+    response_model=DoctorAssistantChatResponse,
+    tags=["Doctor RAG"],
+)
+async def rag_chat_endpoint(request: DoctorAssistantChatRequest):
+    """Forward user query to NVIDIA NIM, with Gemini as a fallback.
+    This endpoint is used by the floating chat button in the UI.
+    """
+    if not settings.NVIDIA_NIMS_API_KEY and not settings.GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="AI chat is not configured. Set NVIDIA_NIMS_API_KEY or GEMINI_API_KEY in backend/.env.",
+        )
+
+    if settings.NVIDIA_NIMS_API_KEY:
+        try:
+            return DoctorAssistantChatResponse(
+                reply=await call_nvidia_chat(request.user_message)
+            )
+        except Exception as nvidia_error:
+            status_code = (
+                nvidia_error.response.status_code
+                if isinstance(nvidia_error, httpx.HTTPStatusError)
+                else None
+            )
+            logger.warning(
+                "NVIDIA chat provider failed (%s, HTTP %s); trying Gemini fallback",
+                type(nvidia_error).__name__,
+                status_code or "n/a",
+            )
+
+    if settings.GEMINI_API_KEY:
+        try:
+            return DoctorAssistantChatResponse(
+                reply=await call_gemini_chat(request.user_message)
+            )
+        except Exception as gemini_error:
+            status_code = getattr(gemini_error, "code", None) or getattr(
+                gemini_error, "status_code", None
+            )
+            logger.warning(
+                "Gemini chat fallback failed (%s, HTTP %s)",
+                type(gemini_error).__name__,
+                status_code or "n/a",
+            )
+    else:
+        logger.warning(
+            "Gemini chat fallback is not configured; set GEMINI_API_KEY in backend/.env"
+        )
+
+    raise HTTPException(
+        status_code=503,
+        detail="The AI assistant is temporarily unavailable. Check backend provider logs and try again.",
+    )
+
 @router.get("/health", response_model=SystemHealthResponse, tags=["Health"])
 def get_system_health():
     """
@@ -124,7 +184,11 @@ def register_donor(data: DonorRegistrationRequest):
     """
     try:
         res = BloodDonorService.register_donor(data)
-        return {"success": True, "message": "Donor registered successfully", "data": res}
+        return {
+            "success": True,
+            "message": "Donor registered successfully and saved to the temporary donor registry sheet.",
+            "data": res,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Donor registration error: {str(e)}")
 

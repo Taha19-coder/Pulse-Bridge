@@ -25,6 +25,7 @@ CORS is strictly configured for `http://localhost:3000` (Next.js development) an
 | Method | Endpoint | Description | Auth Required |
 |---|---|---|---|
 | `GET` | `/api/v1/health` | Service health, Supabase status & Gemini readiness | No |
+| `POST` | `/api/v1/rag/chat` | Doctor Assistant chat (NVIDIA NIM, Gemini fallback) | No |
 | `POST` | `/api/v1/reports/explain` | Multipart upload (PDF/Image) for bilingual AI breakdown | Optional (Saves to user profile if authed) |
 | `GET` | `/api/v1/reports/history` | Fetches authenticated user's past explained reports | Yes |
 | `POST` | `/api/v1/doctors/search` | Grounded hybrid semantic & structured doctor search | No |
@@ -55,6 +56,29 @@ CORS is strictly configured for `http://localhost:3000` (Next.js development) an
   }
 }
 ```
+
+### Doctor Assistant Chat
+#### `POST /api/v1/rag/chat`
+- Content-Type: `application/json`
+- `user_message`: required, trimmed string from 1 to 4,000 characters
+- Provider configuration: set `NVIDIA_NIMS_API_KEY` and/or `GEMINI_API_KEY` in `backend/.env`
+- NVIDIA uses `NVIDIA_NIMS_CHAT_MODEL` (defaults to `deepseek-ai/deepseek-v4.1-flash`); Gemini is used if NVIDIA is unavailable.
+
+**Request:**
+```json
+{
+  "user_message": "Can you explain what a blood test measures?"
+}
+```
+
+**Success response:**
+```json
+{
+  "reply": "..."
+}
+```
+
+Invalid messages return `422`; if all configured providers fail, the service returns `503`.
 
 ### 3.2 Medical Report Explainer
 #### `POST /api/v1/reports/explain`

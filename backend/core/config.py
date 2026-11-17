@@ -51,15 +51,29 @@ class Settings(BaseSettings):
         default="",
         description="Google Gemini API Key for Multimodal Document AI and Embeddings"
     )
+    NVIDIA_NIMS_API_KEY: str = Field(
+        default="",
+        description="NVIDIA NIM API key used by the doctor assistant RAG chatbot"
+    )
+    NVIDIA_NIMS_CHAT_MODEL: str = Field(
+        default="deepseek-ai/deepseek-v4.1-flash",
+        description="Model identifier for NVIDIA NIM doctor assistant chat"
+    )
     OPENROUTER_API_KEY: Optional[str] = Field(
         default=None,
         description="Optional OpenRouter API Key for backup model inference"
     )
 
     # Model identifiers
-    GEMINI_VISION_MODEL: str = Field(default="gemini-1.5-flash")
-    GEMINI_CHAT_MODEL: str = Field(default="gemini-1.5-flash")
-    GEMINI_EMBEDDING_MODEL: str = Field(default="models/text-embedding-004")
+    # NOTE: gemini-1.5-* and text-embedding-004 are retired. Override any of these in
+    # backend/.env (e.g. GEMINI_CHAT_MODEL=...) if Google renames/retires a model again.
+    GEMINI_VISION_MODEL: str = Field(default="gemini-2.5-flash")
+    GEMINI_CHAT_MODEL: str = Field(default="gemini-2.5-flash")
+    GEMINI_EMBEDDING_MODEL: str = Field(default="gemini-embedding-001")
+    # Must match vector(N) in supabase/migrations/02_doctors_and_pgvector.sql
+    EMBEDDING_DIM: int = Field(default=768)
+    # Minimum cosine similarity for a doctor to count as a semantic match
+    SEMANTIC_MATCH_THRESHOLD: float = Field(default=0.45)
 
     # Storage Bucket Name
     STORAGE_BUCKET_REPORTS: str = Field(default="medical_reports")
@@ -88,6 +102,8 @@ class Settings(BaseSettings):
             missing.append("SUPABASE_SERVICE_ROLE_KEY (Set your Supabase Service Role Secret in backend/.env)")
         if not self.GEMINI_API_KEY or "your-gemini" in self.GEMINI_API_KEY:
             missing.append("GEMINI_API_KEY (Set your Google Gemini API Key in backend/.env)")
+        if not self.NVIDIA_NIMS_API_KEY or "nvapi-" not in self.NVIDIA_NIMS_API_KEY.lower():
+            missing.append("NVIDIA_NIMS_API_KEY (Set your NVIDIA NIM API Key in backend/.env)")
         return missing
 
 
@@ -108,7 +124,7 @@ def verify_configuration_or_warn():
         print("The following mandatory environment variables are not yet configured:", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
-        print("\nPlease update backend/.env with your actual Supabase and Gemini credentials.", file=sys.stderr)
+        print("\nPlease update backend/.env with your actual Supabase, Gemini, and NVIDIA credentials.", file=sys.stderr)
         print("=" * 78 + "\n", file=sys.stderr)
     else:
         print("[OK] PULSE BRIDGE - Environment credentials verified successfully.")

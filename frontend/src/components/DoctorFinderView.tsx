@@ -73,14 +73,14 @@ export default function DoctorFinderView() {
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-semibold mb-4">
-            <ShieldCheck className="w-3.5 h-3.5 text-teal-400" /> Grounded Doctor RAG (2,652 Verified Practitioners)
+            <ShieldCheck className="w-3.5 h-3.5 text-teal-400" /> Find a doctor
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
             Verified Doctor Discovery
           </h1>
           <p className="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed">
-            Search 2,652 real medical specialists across 117 cities in Pakistan using natural language.
-            Zero hallucinated profiles, guaranteed authentic hospital locations, fees and patient ratings.
+            Browse doctor listings by medical need, location, consultation fee, and experience.
+            Review profile details and contact information before choosing a provider.
           </p>
         </div>
       </div>
