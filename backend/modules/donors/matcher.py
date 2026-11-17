@@ -68,6 +68,7 @@ def rank_and_format_donors(
     """
     Applies compatibility filtering, availability status checks,
     and hierarchical location ranking (City + Area > City > Other).
+    Supports both old CSV columns and new Excel columns.
     """
     req_group = request.recipient_blood_group.strip().upper()
     target_city = request.city.strip().lower()
@@ -77,18 +78,22 @@ def rank_and_format_donors(
     matched_list: List[MatchedDonor] = []
 
     for d in donor_records:
-        d_group = str(d.get("blood_group", "")).strip().upper()
+        # Handle both old and new column names
+        d_group = str(d.get("blood_group", d.get("Blood Group", ""))).strip().upper()
         if d_group not in compatible_groups:
             continue
 
-        availability = str(d.get("availability_status", d.get("availability", "Available"))).capitalize()
+        raw_availability = str(
+            d.get("availability_status", d.get("Available for Emergency", "Available"))
+        ).strip().lower()
+        availability = "Available" if raw_availability in {"available", "yes", "true", "1"} else "Unavailable"
         if request.only_available and availability != "Available":
             continue
 
-        d_city = str(d.get("city", "")).strip()
-        d_area = str(d.get("area", "")).strip()
-        d_address = str(d.get("full_address", d.get("address", ""))).strip()
-        last_date = str(d.get("last_donation_date", "")).strip() or None
+        d_city = str(d.get("city", d.get("City", ""))).strip()
+        d_area = str(d.get("area", d.get("Area/Neighborhood", ""))).strip()
+        d_address = str(d.get("full_address", d.get("Address", ""))).strip()
+        last_date = str(d.get("last_donation_date", d.get("Last Donation Date", ""))).strip() or None
         eligible = is_eligible_to_donate(last_date)
 
         # Proximity ranking
@@ -100,14 +105,14 @@ def rank_and_format_donors(
         else:
             rank = 3  # Other city
 
-        norm_phone = normalize_pakistan_phone(str(d.get("contact_number", "")))
+        norm_phone = normalize_pakistan_phone(str(d.get("contact_number", d.get("Phone Number", ""))))
         masked = mask_phone_number(norm_phone)
         wa_link = generate_emergency_whatsapp_link(norm_phone, req_group, request.city)
         reason = get_compatibility_description(d_group, req_group)
 
         matched_donor = MatchedDonor(
-            donor_code=str(d.get("donor_code", d.get("donor_id", "PKD-0000"))),
-            full_name=str(d.get("full_name", "Anonymous Donor")),
+            donor_code=str(d.get("donor_code", d.get("Donor ID", "DON-0000"))),
+            full_name=str(d.get("full_name", d.get("Full Name", "Anonymous Donor"))),
             blood_group=d_group,
             compatibility_reason=reason,
             city=d_city,

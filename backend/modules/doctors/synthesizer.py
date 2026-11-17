@@ -6,7 +6,7 @@ from backend.models.schemas import (
     VerifiedDoctor,
     DoctorFilterMetaResponse
 )
-from backend.modules.doctors.retriever import search_doctors_in_dataset, get_cached_doctors
+from backend.modules.doctors.rag_retriever import search_doctors_rag, get_doctor_records
 
 
 def generate_grounded_summary(query: str, doctors: List[VerifiedDoctor], city: str = None) -> str:
@@ -38,9 +38,9 @@ class DoctorRAGService:
     @staticmethod
     def search(query_req: DoctorSearchQuery) -> DoctorSearchResponse:
         """
-        Executes grounded retrieval and synthesizes the final response.
+        Executes hybrid RAG retrieval (semantic + clinical keywords) and synthesizes the final response.
         """
-        doctors = search_doctors_in_dataset(query_req)
+        doctors = search_doctors_rag(query_req)
         summary = generate_grounded_summary(query_req.query, doctors, query_req.city)
 
         applied = {}
@@ -64,7 +64,7 @@ class DoctorRAGService:
         """
         Extracts sorted unique cities and specializations for frontend dropdown filters.
         """
-        all_docs = get_cached_doctors()
+        all_docs = get_doctor_records()
         cities = sorted(list(set(d["city"] for d in all_docs if d["city"])))
         specs = sorted(list(set(d["specialization_primary"] for d in all_docs if d["specialization_primary"])))
         return DoctorFilterMetaResponse(

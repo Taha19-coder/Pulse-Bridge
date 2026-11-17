@@ -99,6 +99,10 @@ class DonorRegistrationRequest(BaseModel):
     contact_number: str
     availability: str = Field(default="Available")
     last_donation_date: Optional[str] = None
+    email: Optional[str] = None
+    medical_conditions: Optional[str] = None
+    weight_kg: Optional[float] = None
+    notes: Optional[str] = None
 
 
 class BloodRequestCreate(BaseModel):

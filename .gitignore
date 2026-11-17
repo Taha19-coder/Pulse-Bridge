@@ -60,3 +60,6 @@ desktop.ini
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local donor registry can contain personal contact data
+data/blood_donors.xlsx

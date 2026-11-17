@@ -23,7 +23,21 @@ def test_compatibility_rules():
     assert not is_compatible("AB+", "B+")
 
 
-def test_donor_search_and_privacy_masking():
+def test_donor_search_and_privacy_masking(tmp_path, monkeypatch):
+    registry_path = tmp_path / "donor_registry.xlsx"
+    pd.DataFrame([{
+        "Donor ID": "DON-TEST",
+        "Full Name": "Test Donor",
+        "Blood Group": "A+",
+        "City": "Lahore",
+        "Area/Neighborhood": "Gulberg",
+        "Phone Number": "03000000000",
+        "Last Donation Date": "2024-01-01",
+        "Available for Emergency": "Yes",
+        "Status": "Active",
+    }]).to_excel(registry_path, index=False)
+    monkeypatch.setattr(donor_service_module, "DONOR_REGISTRY_XLSX_PATH", registry_path)
+
     req = BloodMatchRequest(recipient_blood_group="A+", city="Lahore", urgency="Emergency")
     res = BloodDonorService.match_donors(req)
     assert res.total_matches > 0
@@ -37,9 +51,7 @@ def test_donor_search_and_privacy_masking():
 
 
 def test_donor_registration_creates_local_registry_backup(tmp_path, monkeypatch):
-    csv_path = tmp_path / "donor_registrations.csv"
     xlsx_path = tmp_path / "donor_registrations.xlsx"
-    monkeypatch.setattr(donor_service_module, "DONOR_REGISTRY_CSV_PATH", csv_path)
     monkeypatch.setattr(donor_service_module, "DONOR_REGISTRY_XLSX_PATH", xlsx_path)
 
     data = DonorRegistrationRequest(
@@ -56,10 +68,9 @@ def test_donor_registration_creates_local_registry_backup(tmp_path, monkeypatch)
 
     saved = BloodDonorService.register_donor(data)
 
-    assert saved["full_name"] == "Ali Khan"
-    assert csv_path.exists()
+    assert saved["Full Name"] == "Ali Khan"
     assert xlsx_path.exists()
 
-    csv_df = pd.read_csv(csv_path)
-    assert csv_df.iloc[-1]["full_name"] == "Ali Khan"
-    assert csv_df.iloc[-1]["blood_group"] == "O-"
+    xlsx_df = pd.read_excel(xlsx_path)
+    assert xlsx_df.iloc[-1]["Full Name"] == "Ali Khan"
+    assert xlsx_df.iloc[-1]["Blood Group"] == "O-"
