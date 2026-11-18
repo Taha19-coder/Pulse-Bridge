@@ -99,6 +99,7 @@ def load_and_clean_doctors() -> List[Dict[str, Any]]:
     df = df.drop_duplicates()
 
     cleaned_doctors: List[Dict[str, Any]] = []
+    seen_doctor_hashes = set()
 
     for _, row in df.iterrows():
         raw_name = str(row["Doctor Name"]).strip()
@@ -130,6 +131,10 @@ def load_and_clean_doctors() -> List[Dict[str, Any]]:
         fee = int(row.get("Fee(PKR)", 0))
 
         raw_hash = generate_doctor_hash(raw_name, city, hospital_address or "unlisted")
+        if raw_hash in seen_doctor_hashes:
+            continue
+        seen_doctor_hashes.add(raw_hash)
+
         search_doc = build_search_document(
             raw_name, city, primary_spec, specs, quals, exp, hospital_name, fee, satisfaction
         )

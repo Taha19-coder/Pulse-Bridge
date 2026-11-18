@@ -29,6 +29,107 @@ def test_api_rag_chat_endpoint_uses_chat_service():
     chat_service.assert_awaited_once_with("Can you help me understand a health term?")
 
 
+def test_api_rag_chat_returns_grounded_doctor_results_as_points():
+    doctors = [
+        Mock(
+            doctor_name="Dr. Example One",
+            specialization_primary="Cardiologist",
+            hospital_name="Heart Care Clinic",
+            city="Lahore",
+            fee_pkr=2500,
+            experience_years=12,
+        ),
+        Mock(
+            doctor_name="Dr. Example Two",
+            specialization_primary="Cardiologist",
+            hospital_name="City Medical Center",
+            city="Lahore",
+            fee_pkr=3000,
+            experience_years=8,
+        ),
+    ]
+
+    with (
+        patch(
+            "backend.api.routes.DoctorRAGService.get_filter_meta",
+            return_value=Mock(cities=["Lahore"]),
+        ),
+        patch(
+            "backend.api.routes.DoctorRAGService.search",
+            return_value=Mock(doctors=doctors),
+        ) as doctor_search,
+        patch("backend.api.routes.call_nvidia_chat", new_callable=AsyncMock) as chat_service,
+    ):
+        response = client.post(
+            "/api/v1/rag/chat",
+            json={"user_message": "Tell me cardio doctors in Lahore"},
+        )
+
+    assert response.status_code == 200
+    reply = response.json()["reply"]
+    assert "Verified cardiologists in Lahore:" in reply
+    assert "1. Dr. Example One — Cardiologist" in reply
+    assert "Hospital/clinic: Heart Care Clinic" in reply
+    assert "2. Dr. Example Two — Cardiologist" in reply
+    assert doctor_search.call_args.args[0].city == "Lahore"
+    assert doctor_search.call_args.args[0].specialization == "Cardiologist"
+    chat_service.assert_not_awaited()
+
+
+def test_api_rag_chat_reports_when_no_verified_cardiologists_match():
+    with (
+        patch(
+            "backend.api.routes.DoctorRAGService.get_filter_meta",
+            return_value=Mock(cities=["Lahore"]),
+        ),
+        patch(
+            "backend.api.routes.DoctorRAGService.search",
+            return_value=Mock(doctors=[]),
+        ),
+    ):
+        response = client.post(
+            "/api/v1/rag/chat",
+            json={"user_message": "Tell me cardio doctors in Lahore"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == (
+        "No verified cardiologists in Lahore were found in the doctor directory. "
+        "Try another city or specialty."
+    )
+
+
+def test_api_rag_chat_searches_donors_by_exact_blood_group():
+    donors = [
+        Mock(full_name="Eligible O Negative Donor", blood_group="O-", city="Lahore", eligible_now=True),
+        Mock(full_name="Other Blood Group Donor", blood_group="A+", city="Lahore", eligible_now=True),
+        Mock(full_name="Ineligible O Negative Donor", blood_group="O-", city="Lahore", eligible_now=False),
+    ]
+    with (
+        patch(
+            "backend.api.routes.BloodDonorService.match_donors",
+            return_value=Mock(donors=donors),
+        ) as donor_search,
+        patch("backend.api.routes.call_nvidia_chat", new_callable=AsyncMock) as chat_service,
+    ):
+        response = client.post(
+            "/api/v1/rag/chat",
+            json={"user_message": "Show O- donors in Lahore"},
+        )
+
+    assert response.status_code == 200
+    reply = response.json()["reply"]
+    assert "Eligible O Negative Donor" in reply
+    assert "Other Blood Group Donor" not in reply
+    assert "Ineligible O Negative Donor" not in reply
+    assert "Contact details are not shown in chat" in reply
+    search_request = donor_search.call_args.args[0]
+    assert search_request.recipient_blood_group == "O-"
+    assert search_request.city == "Lahore"
+    assert search_request.only_available
+    chat_service.assert_not_awaited()
+
+
 def test_api_rag_chat_uses_gemini_when_nvidia_fails():
     with (
         patch(

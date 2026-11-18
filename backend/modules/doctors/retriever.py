@@ -6,6 +6,22 @@ from backend.modules.doctors.cleaner import load_and_clean_doctors
 
 # Clinical Symptom to Specialty Hierarchy: Primary specialists get heavy weight; General Physicians get minor fallback weight
 CLINICAL_SYMPTOM_MAP: Dict[str, Dict[str, List[str]]] = {
+    "cardio": {
+        "primary": ["Cardiologist"],
+        "secondary": []
+    },
+    "cardiology": {
+        "primary": ["Cardiologist"],
+        "secondary": []
+    },
+    "cardiologist": {
+        "primary": ["Cardiologist"],
+        "secondary": []
+    },
+    "cardiologists": {
+        "primary": ["Cardiologist"],
+        "secondary": []
+    },
     "heart": {
         "primary": ["Cardiologist", "Pulmonologist / Lung Specialist, Cardiologist", "Cardiologist, Diabetologist, Gastroenterologist"],
         "secondary": ["General Physician"]
@@ -142,6 +158,24 @@ def get_cached_doctors() -> List[Dict[str, Any]]:
     return _CACHED_DOCTORS
 
 
+def matches_specialization(doc: Dict[str, Any], requested: str) -> bool:
+    requested_key = requested.strip().casefold()
+    if requested_key == doc["specialization_primary"].strip().casefold():
+        return True
+
+    requested_specialties = {
+        specialty.strip().casefold()
+        for specialty in requested.split(",")
+        if specialty.strip()
+    }
+    doctor_specialties = {
+        specialty.strip().casefold()
+        for specialty in doc["specializations"]
+        if specialty.strip()
+    }
+    return bool(requested_specialties & doctor_specialties)
+
+
 def map_symptoms_to_specialties(query_text: str) -> tuple[List[str], List[str]]:
     """
     Returns (primary_specialties, secondary_specialties) inferred from clinical keywords in query.
@@ -232,6 +266,12 @@ def search_doctors_in_dataset(query_req: DoctorSearchQuery) -> List[VerifiedDoct
         if query_req.specialization not in primary_specs:
             primary_specs.insert(0, query_req.specialization)
 
+    required_specialties = (
+        [query_req.specialization]
+        if query_req.specialization
+        else primary_specs if primary_specs and not secondary_specs else []
+    )
+
     # Tokenize query words
     q_tokens = [w.lower() for w in re.findall(r"\b\w{3,}\b", query_req.query)]
 
@@ -239,6 +279,11 @@ def search_doctors_in_dataset(query_req: DoctorSearchQuery) -> List[VerifiedDoct
     scored_candidates = []
     for doc in all_docs:
         # Structured filters
+        if required_specialties and not any(
+            matches_specialization(doc, specialization)
+            for specialization in required_specialties
+        ):
+            continue
         if query_req.max_fee and doc["fee_pkr"] > query_req.max_fee:
             continue
         if query_req.min_experience_years and doc["experience_years"] < query_req.min_experience_years:

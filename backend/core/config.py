@@ -63,12 +63,16 @@ class Settings(BaseSettings):
         default=None,
         description="Optional OpenRouter API Key for backup model inference"
     )
+    OPENROUTER_CHAT_MODEL: str = Field(
+        default="meta-llama/llama-3.1-8b-instruct:free",
+        description="Model identifier for OpenRouter doctor assistant chat"
+    )
 
     # Model identifiers
     # NOTE: gemini-1.5-* and text-embedding-004 are retired. Override any of these in
     # backend/.env (e.g. GEMINI_CHAT_MODEL=...) if Google renames/retires a model again.
-    GEMINI_VISION_MODEL: str = Field(default="gemini-2.5-flash")
-    GEMINI_CHAT_MODEL: str = Field(default="gemini-2.5-flash")
+    GEMINI_VISION_MODEL: str = Field(default="gemini-3.1-flash-lite")
+    GEMINI_CHAT_MODEL: str = Field(default="gemini-3.1-flash-lite")
     GEMINI_EMBEDDING_MODEL: str = Field(default="gemini-embedding-001")
     # Must match vector(N) in supabase/migrations/02_doctors_and_pgvector.sql
     EMBEDDING_DIM: int = Field(default=768)

@@ -12,6 +12,7 @@ from backend.models.schemas import DoctorSearchQuery, VerifiedDoctor
 from backend.modules.doctors.retriever import (
     CLINICAL_SYMPTOM_MAP,
     get_cached_doctors,
+    matches_specialization,
     search_doctors_in_dataset,
 )
 
@@ -168,6 +169,12 @@ def search_doctors_rag(query_req: DoctorSearchQuery) -> List[VerifiedDoctor]:
         if query_req.specialization not in primary_specs:
             primary_specs.insert(0, query_req.specialization)
 
+    required_specialties = (
+        [query_req.specialization]
+        if query_req.specialization
+        else primary_specs if primary_specs and not secondary_specs else []
+    )
+
     # Tokenize query words
     q_tokens = [w.lower() for w in re.findall(r"\b\w{3,}\b", query_req.query)]
 
@@ -179,6 +186,11 @@ def search_doctors_rag(query_req: DoctorSearchQuery) -> List[VerifiedDoctor]:
     scored_candidates = []
     for doc in all_docs:
         # Structured filters
+        if required_specialties and not any(
+            matches_specialization(doc, specialization)
+            for specialization in required_specialties
+        ):
+            continue
         if query_req.max_fee and doc["fee_pkr"] > query_req.max_fee:
             continue
         if query_req.min_experience_years and doc["experience_years"] < query_req.min_experience_years:

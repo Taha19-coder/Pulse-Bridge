@@ -50,6 +50,7 @@ class ReportExplanationResponse(BaseModel):
     overall_health_insight: str
     suggested_questions_for_doctor: List[str]
     dietary_lifestyle_considerations: List[str] = []
+    key_takeaways: List[str] = []
     mandatory_disclaimer: str
 
 

@@ -50,6 +50,17 @@ def test_donor_search_and_privacy_masking(tmp_path, monkeypatch):
         assert donor.whatsapp_link.startswith("https://wa.me/")
 
 
+def test_empty_donor_registry_returns_empty_match_response(monkeypatch):
+    monkeypatch.setattr(donor_service_module, "load_donors_from_excel", lambda: [])
+
+    result = BloodDonorService.match_donors(
+        BloodMatchRequest(recipient_blood_group="O-", city="Lahore")
+    )
+
+    assert result.total_matches == 0
+    assert result.donors == []
+
+
 def test_donor_registration_creates_local_registry_backup(tmp_path, monkeypatch):
     xlsx_path = tmp_path / "donor_registrations.xlsx"
     monkeypatch.setattr(donor_service_module, "DONOR_REGISTRY_XLSX_PATH", xlsx_path)

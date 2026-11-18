@@ -105,17 +105,6 @@ class BloodDonorService:
         Applies blood compatibility rules and proximity hierarchy.
         """
         records = load_donors_from_excel()
-
-        if not records:
-            return BloodMatchResponse(
-                request_code=request.request_code or f"REQ-{uuid.uuid4().hex[:6].upper()}",
-                blood_group_needed=request.blood_group_needed.upper(),
-                city=request.city.title(),
-                total_matches=0,
-                matches=[],
-                message="No donors registered yet."
-            )
-
         return rank_and_format_donors(records, request)
 
     @staticmethod

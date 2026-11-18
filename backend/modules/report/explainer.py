@@ -11,32 +11,39 @@ from backend.modules.report.extractor import extract_biomarkers_with_gemini, fal
 
 
 EXPLANATION_PROMPT_TEMPLATE = """
-You are Pulse Bridge's empathetic, highly knowledgeable medical health literacy AI.
+You are Pulse Bridge's premium medical health literacy AI — the "VIP Concierge" for understanding lab reports.
 Target Language: {language}
 
 Here is the extracted patient biomarker data:
 {biomarkers_summary}
 
-YOUR CLINICAL LITERACY RESPONSIBILITIES:
-1. Explain the findings in simple, compassionate, non-technical language.
-2. If any test values are marked LOW or ELEVATED, explain what that generally signifies in everyday terms (e.g. low hemoglobin may cause mild fatigue or reflect low dietary iron).
-3. If language is 'ur', provide fluent, culturally respectful Urdu text suitable for Pakistani patients.
-4. Provide 3 specific, educated questions the patient should ask their attending doctor.
-5. Provide 2 general dietary or lifestyle wellness considerations (strictly non-prescriptive, e.g. leafy greens for iron, adequate hydration).
-6. STRICT CLINICAL GUARDRAIL: NEVER declare a medical diagnosis (e.g. do not say "You have diabetes"). NEVER prescribe drugs or dosages. Always advise consulting a licensed physician.
+YOUR PREMIUM CLINICAL LITERACY RESPONSIBILITIES:
+1. **Structure**: Use CLEAR bullet points (•) and numbered lists. Bold key terms. Short paragraphs. Scannable format.
+2. **Tone**: VIP concierge — professional, empathetic, clear. No jargon without plain-language explanation.
+3. **For each abnormal marker**: Explain what it means in everyday terms, potential implications, and context.
+4. **Language**: If 'ur', provide fluent, culturally respectful Urdu (Nastaliq-appropriate) for Pakistani patients.
+5. **Questions for Doctor**: 3 specific, educated questions the patient should ask their physician.
+6. **Wellness Considerations**: 2 general dietary/lifestyle tips (non-prescriptive, e.g., "iron-rich foods like spinach").
+7. **SAFETY GUARDRAIL**: NEVER diagnose, NEVER prescribe. Always advise consulting a licensed physician.
+8. **Output fields**: Do not include section headings or medical disclaimers inside JSON values; the interface renders them separately.
 
 FORMAT YOUR RESPONSE AS JSON:
 {{
-  "abnormal_findings_summary": "Plain-language summary of out-of-range markers",
-  "overall_health_insight": "Empathetic overview of the patient's test panel",
+  "abnormal_findings_summary": "Concise bullet-point summary of out-of-range markers with plain-language meaning",
+  "overall_health_insight": "Empathetic VIP overview of the patient's test panel — what it means holistically",
   "suggested_questions_for_doctor": [
-    "Question 1",
-    "Question 2",
-    "Question 3"
+    "Specific question 1 for the attending physician",
+    "Specific question 2 for the attending physician",
+    "Specific question 3 for the attending physician"
   ],
   "dietary_lifestyle_considerations": [
-    "Consideration 1",
-    "Consideration 2"
+    "Practical, non-prescriptive wellness tip 1",
+    "Practical, non-prescriptive wellness tip 2"
+  ],
+  "key_takeaways": [
+    "VIP takeaway 1 — most important actionable insight",
+    "VIP takeaway 2 — second most important insight",
+    "VIP takeaway 3 — reassurance or next step guidance"
   ]
 }}
 """
@@ -114,6 +121,7 @@ class ReportExplainerService:
         health_insight = explanation_data.get("overall_health_insight", "")
         questions = explanation_data.get("suggested_questions_for_doctor", [])
         lifestyle = explanation_data.get("dietary_lifestyle_considerations", [])
+        key_takeaways = explanation_data.get("key_takeaways", [])
 
         # 3. Clinical Safety Guardrail Pass
         sanitized_summary, _ = validate_and_sanitize_medical_text(abnormal_summary, language)
@@ -150,6 +158,7 @@ class ReportExplainerService:
             overall_health_insight=sanitized_insight,
             suggested_questions_for_doctor=questions,
             dietary_lifestyle_considerations=lifestyle,
+            key_takeaways=key_takeaways,
             mandatory_disclaimer=disclaimer
         )
 
@@ -158,35 +167,46 @@ class ReportExplainerService:
         if language == "ur":
             if not abnormal_items:
                 return {
-                    "abnormal_findings_summary": "تمام جانچے گئے بنیادی ٹیسٹ لیبارٹری کی عام حد کے مطابق ہیں۔",
-                    "overall_health_insight": "آپ کے عمومی لیب کے نتائج مستحکم ہیں، تاہم انفرادی صحت کے جائزے کے لیے اپنے معالج سے مشورہ جاری رکھیں۔",
+                    "abnormal_findings_summary": "• تمام بنیادی ٹیسٹ عام حد میں ہیں — کوئی غیر معمولی Resultado نہیں۔",
+                    "overall_health_insight": "آپ کے لیب کے نتائج مستحکم ہیں۔ روتین چیک اپ جاری رکھیں۔",
                     "suggested_questions_for_doctor": [
-                        "کیا مجھے مستقبل میں معمول کے فالو اپ ٹیسٹ کروانے کی ضرورت ہے؟",
-                        "طرز زندگی یا خوراک میں کون سی مثبت تبدیلیاں میری صحت کے لیے مفید ہوں گی؟"
+                        "کیا مجھے سالانہ کوئی مخصوص ویلمس مارکر چیک کرانے چاہئیں؟",
+                        "کیا میری موجودہ نتائج میری لائف سٹائل کے لیے درست ہیں؟"
                     ],
                     "dietary_lifestyle_considerations": [
-                        "متوازن غذا اور پانی کا مناسب استعمال معمول بنائیں",
-                        "روزانہ ہلکی ورزش کو معمول کا حصہ بنائیں"
+                        "متوازن خوراک اور پانی کا مناسب استعمال رکھیں",
+                        "روزنہ ہلکی ورزش کو اپن روتین کا حصہ بنائیں"
+                    ],
+                    "key_takeaways": [
+                        "✅ سب ٹیسٹ معمول کے دائرے میں — فکر کی بات نہیں",
+                        "📅 باقاعدہ سالانہ چیک اپ جاری رکھیں",
+                        "💧 پانی پینے اور صحت مند کھانے پر توجہ دیں"
                     ]
                 }
             items_str = "، ".join([f"{b.name} ({b.observed_value})" for b in abnormal_items])
             return {
-                "abnormal_findings_summary": f"کچھ پیرامیٹرز میں تغیر دیکھا گیا ہے: {items_str}۔ یہ عارضی غذائی یا جسمانی عوامل کی وجہ سے ہو سکتا ہے۔",
-                "overall_health_insight": "یہ رپورٹ بنیادی آگاہی فراہم کرتی ہے۔ درست تشخیص کے لیے اپنے مستند معالج سے رجوع فرمائیں۔",
+                "abnormal_findings_summary": f"• **{items_str}** میں تبدیلی دیکھی گئی — یہ اکثر غذائی یا عارضی عوامل کی وجہ سے ہوتی ہے۔",
+                "overall_health_insight": "کچھ مارکرز معمول کی حد سے باہر ہیں۔ براہ کرم اپنے معالج سے مشورہ کریں۔",
                 "suggested_questions_for_doctor": [
-                    "کیا ان نتائج کے لیے کوئی اضافی تشخیصی ٹیسٹ درکار ہے؟",
-                    "کیا غذائی پرہیز یا طرز زندگی کی تبدیلیاں تجویز کی جاتی ہیں؟"
+                    "کیا ان نتائج کے لیے مزید ٹیسٹ درکار ہیں؟",
+                    "کیا غذائی یا لائف سٹائل میں تبدیلی تجویز کی جاتی ہے؟",
+                    "کیا ۴ تا ۸ ہفتے بعد دوہرا ٹیسٹ چاہیے؟"
                 ],
                 "dietary_lifestyle_considerations": [
-                    "ڈاکٹر کے مشورے کے بغیر کوئی خود ساختہ دوا نہ لیں",
-                    "صحت بخش قدرتی غذا اور مناسب نیند کا خیال رکھیں"
+                    "ڈاکٹر کی مشورہ کے بغیر کوئی دواء نہ لیں",
+                    "قدرتی خوراک اور مناسب نیند کا خیال رکھیں"
+                ],
+                "key_takeaways": [
+                    "⚠️ کچھ مارکرز توجہ طلب ہیں — ڈاکٹر سے ملیں",
+                    "🥗 غذائی اصلاح اکثر مسائل کو حل کر سکتی ہے",
+                    "📋 اپنی رپورٹ ڈاکٹر کو دکھائیں، خود تشخیص نہ لگاۓ"
                 ]
             }
 
         # English
         if not abnormal_items:
             return {
-                "abnormal_findings_summary": "All identified parameters fall within standard biological reference ranges.",
+                "abnormal_findings_summary": "• All parameters are within normal reference ranges — no abnormalities detected.",
                 "overall_health_insight": "Your laboratory markers demonstrate healthy baseline stability. Continue routine preventative health checkups.",
                 "suggested_questions_for_doctor": [
                     "Are there any specific wellness markers we should recheck annually?",
@@ -195,12 +215,17 @@ class ReportExplainerService:
                 "dietary_lifestyle_considerations": [
                     "Maintain balanced hydration and whole-food nutrition",
                     "Incorporate regular moderate cardiovascular activity"
+                ],
+                "key_takeaways": [
+                    "✅ All tests normal — no immediate concerns",
+                    "📅 Continue annual preventative checkups",
+                    "💧 Stay hydrated and maintain balanced nutrition"
                 ]
             }
 
         items_str = ", ".join([f"{b.name} ({b.observed_value} vs {b.reference_range})" for b in abnormal_items])
         return {
-            "abnormal_findings_summary": f"Notable variations observed in: {items_str}. These changes often correlate with dietary factors, temporary strain, or nutritional needs.",
+            "abnormal_findings_summary": f"• **{items_str}** — Notable variations observed. These changes often correlate with dietary factors, temporary strain, or nutritional needs.",
             "overall_health_insight": "Several markers deviate from standard reference thresholds and warrant clinical review with your primary care physician.",
             "suggested_questions_for_doctor": [
                 "Could these out-of-range values indicate an underlying dietary or metabolic factor?",
@@ -210,5 +235,10 @@ class ReportExplainerService:
             "dietary_lifestyle_considerations": [
                 "Avoid self-prescribing over-the-counter supplements prior to clinical review",
                 "Maintain a consistent sleep schedule and hydration"
+            ],
+            "key_takeaways": [
+                "⚠️ Some markers need attention — consult your doctor",
+                "🥗 Dietary changes often help normalize values",
+                "📋 Share this report with your physician — don't self-diagnose"
             ]
         }

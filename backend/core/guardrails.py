@@ -2,12 +2,20 @@ import re
 from typing import Tuple, List
 
 MANDATORY_DISCLAIMER_EN = (
+    "For educational purposes only; this is not a diagnosis. Discuss your results with a qualified medical professional."
+)
+
+MANDATORY_DISCLAIMER_UR = (
+    "یہ خلاصہ صرف معلوماتی مقصد کے لیے ہے، تشخیص یا علاج نہیں۔ اپنی رپورٹ کے بارے میں مستند ڈاکٹر سے مشورہ کریں۔"
+)
+
+LEGACY_DISCLAIMER_EN = (
     "IMPORTANT MEDICAL NOTICE: This analysis is provided for educational and health literacy purposes only. "
     "It does not constitute a medical diagnosis, clinical prognosis, or treatment plan. "
     "Always discuss your laboratory results directly with a qualified, licensed medical professional."
 )
 
-MANDATORY_DISCLAIMER_UR = (
+LEGACY_DISCLAIMER_UR = (
     "اہم طبی آگاہی: یہ خلاصہ صرف معلوماتی اور طبی آگاہی کے لیے فراہم کیا گیا ہے۔ "
     "یہ کسی بھی صورت میں حتمی تشخیص یا علاج کی تجویز نہیں ہے۔ "
     "اپنی رپورٹ کے حوالے سے ہمیشہ مستند اور قابل معالج (ڈاکٹر) سے براہ راست رجوع فرمائیں۔"
@@ -35,7 +43,7 @@ def validate_and_sanitize_medical_text(text: str, language: str = "en") -> Tuple
     Deterministic safety guardrail:
     1. Scans generated AI content for unauthorized clinical diagnosis or prescription attempts.
     2. Redacts or softens violating sentences.
-    3. Guarantees presence of the mandatory bilingual disclaimer.
+    3. Removes repeated disclaimer text and generated section headings; the UI renders one safety note separately.
     """
     warnings = []
     sanitized_text = text
@@ -64,9 +72,26 @@ def validate_and_sanitize_medical_text(text: str, language: str = "en") -> Tuple
                 flags=re.IGNORECASE
             )
 
-    # Ensure disclaimer attachment
-    disclaimer = MANDATORY_DISCLAIMER_UR if language == "ur" else MANDATORY_DISCLAIMER_EN
-    if disclaimer not in sanitized_text:
-        sanitized_text = f"{sanitized_text.strip()}\n\n---\n**{disclaimer}**"
+    for disclaimer in (
+        MANDATORY_DISCLAIMER_EN,
+        MANDATORY_DISCLAIMER_UR,
+        LEGACY_DISCLAIMER_EN,
+        LEGACY_DISCLAIMER_UR,
+    ):
+        sanitized_text = re.sub(
+            rf"(?:\s*---\s*)?\s*(?:\*\*)?{re.escape(disclaimer)}(?:\*\*)?",
+            "",
+            sanitized_text,
+            flags=re.IGNORECASE,
+        )
+
+    sanitized_text = re.sub(
+        r"(?im)^\s*#{1,6}\s*Overall Health Insight\s*$",
+        "",
+        sanitized_text,
+    )
+    sanitized_text = re.sub(r"(?m)^\s*---\s*$", "", sanitized_text)
+    sanitized_text = re.sub(r"[ \t]+\n", "\n", sanitized_text)
+    sanitized_text = re.sub(r"\n{3,}", "\n\n", sanitized_text).strip()
 
     return sanitized_text, warnings

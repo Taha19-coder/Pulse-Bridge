@@ -20,6 +20,7 @@ import {
   Sparkles,
   Stethoscope,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Language } from '@/types';
 
 const copy = {
@@ -176,14 +177,18 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [language, setLanguage] = useState<Language>('en');
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [navScrolled, setNavScrolled] = useState(false);
   const text = copy[language];
 
   useEffect(() => {
     const updateBackToTopVisibility = () => setShowBackToTop(window.scrollY > 400);
-    updateBackToTopVisibility();
-    window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+    const handleScroll = () => {
+      updateBackToTopVisibility();
+      setNavScrolled(window.scrollY > 50);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
-    return () => window.removeEventListener('scroll', updateBackToTopVisibility);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   useEffect(() => {
@@ -212,6 +217,26 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const pageVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -20 },
+  };
+
+  const itemVariants = {
+    initial: { opacity: 0, y: 30 },
+    animate: { opacity: 1, y: 0 },
+  };
+
+  const containerVariants = {
+    animate: {
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      },
+    },
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f6f4] text-[#102b3c]">
       <Navbar
@@ -219,29 +244,44 @@ export default function Home() {
         setActiveTab={openTab}
         language={language}
         setLanguage={setLanguage}
+        isScrolled={navScrolled}
       />
 
-      <main className="flex-1 pb-16">
-        {activeTab === 'home' && (
+      <AnimatePresence mode="wait">
+        <motion.main
+          key={activeTab}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          variants={pageVariants}
+          className="flex-1 pb-16"
+        >
+          {activeTab === 'home' && (
           <div>
-            <section className="hero-shell px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
+            <motion.section
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+              className="hero-shell px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-7"
+            >
               <div className="hero-panel relative mx-auto flex min-h-[650px] max-w-[1440px] flex-col overflow-hidden rounded-[1.7rem] border-[3px] border-white/35 px-5 pb-8 pt-8 text-white shadow-[0_26px_80px_rgba(27,65,91,0.2)] sm:min-h-[700px] sm:px-10 sm:pt-10 lg:min-h-[740px] lg:px-14">
                 <div className="hero-grid pointer-events-none absolute inset-0 opacity-50" />
                 <div className="hero-glow hero-glow-one pointer-events-none absolute -left-28 -top-32 h-96 w-96 rounded-full" />
                 <div className="hero-glow hero-glow-two pointer-events-none absolute -bottom-36 -right-20 h-[30rem] w-[30rem] rounded-full" />
 
-                {text.heroEyebrow && (
-                  <div className="relative z-10 flex items-center justify-center">
-                    <span className={`inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[10px] font-bold tracking-[0.2em] text-white/90 uppercase backdrop-blur-md sm:text-xs ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}>
-                      <Sparkles className="h-3.5 w-3.5 text-[#d3f36b]" />
-                      {text.heroEyebrow}
-                    </span>
-                  </div>
-                )}
-
-                <div className="relative z-10 mx-auto mt-10 w-full max-w-6xl text-center sm:mt-12">
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  className="relative z-10 mx-auto mt-10 w-full max-w-6xl text-center sm:mt-12"
+                >
                   <div className="relative">
-                    <h1 className={`hero-title relative z-10 ${language === 'ur' ? 'font-display text-5xl font-medium uppercase leading-[1.8] text-white sm:text-6xl lg:text-7xl font-urdu' : 'hero-title-english flex items-center justify-center gap-[0.025em] whitespace-nowrap font-display text-[clamp(2rem,10vw,10rem)] font-medium uppercase leading-none text-white'}`}>
+                    <motion.h1
+                      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.7, delay: 0.3, ease: 'easeOut' }}
+                      className={`hero-title relative z-10 ${language === 'ur' ? 'font-display text-5xl font-medium uppercase leading-[1.8] text-white sm:text-6xl lg:text-7xl font-urdu' : 'hero-title-english flex items-center justify-center gap-[0.025em] whitespace-nowrap font-display text-[clamp(2rem,10vw,10rem)] font-medium uppercase leading-none text-white'}`}
+                    >
                       {language === 'ur' ? (
                         text.heroTitle
                       ) : (
@@ -257,38 +297,65 @@ export default function Home() {
                           <span>CARE</span>
                         </>
                       )}
-                    </h1>
+                    </motion.h1>
                   </div>
-                  <p className={`relative z-10 mt-5 font-display text-2xl font-semibold tracking-[0.14em] text-[#d5f36c] sm:text-4xl lg:text-5xl ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}>
+                  <motion.p
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.5 }}
+                    className={`relative z-10 mt-5 font-display text-2xl font-semibold tracking-[0.14em] text-[#d5f36c] sm:text-4xl lg:text-5xl ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}
+                  >
                     {text.heroSubtitle}
-                  </p>
-                  <p className={`relative z-10 mx-auto mt-5 max-w-xl text-sm leading-7 text-blue-50/85 sm:text-base ${language === 'ur' ? 'font-urdu text-base leading-[2.2]' : ''}`}>
+                  </motion.p>
+                  <motion.p
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.6 }}
+                    className={`relative z-10 mx-auto mt-5 max-w-xl text-sm leading-7 text-blue-50/85 sm:text-base ${language === 'ur' ? 'font-urdu text-base leading-[2.2]' : ''}`}
+                  >
                     {text.heroDescription}
-                  </p>
+                  </motion.p>
 
-                  <div className="relative z-10 mt-7 flex flex-wrap items-center justify-center gap-3 sm:mt-9">
-                    <button
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.7 }}
+                    className="relative z-10 mt-7 flex flex-wrap items-center justify-center gap-3 sm:mt-9"
+                  >
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
                       type="button"
                       onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
                       className={`group inline-flex items-center gap-2 rounded-full bg-[#d4f36b] px-6 py-3.5 text-sm font-bold text-[#18354a] shadow-[0_8px_24px_rgba(212,243,107,0.18)] transition hover:-translate-y-0.5 hover:bg-[#e2ff80] focus:outline-none focus:ring-2 focus:ring-white/80 focus:ring-offset-2 focus:ring-offset-[#28577a] ${language === 'ur' ? 'font-urdu' : ''}`}
                     >
                       {text.primaryAction}
                       <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       type="button"
                       onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
                       className={`inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15 ${language === 'ur' ? 'font-urdu' : ''}`}
                     >
                       {text.secondaryAction}
-                    </button>
-                  </div>
-                </div>
+                    </motion.button>
+                  </motion.div>
+                </motion.div>
 
-                <div className="relative z-10 mt-auto grid gap-3 pt-10 sm:grid-cols-2 sm:pt-14">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.8 }}
+                  className="relative z-10 mt-auto grid gap-3 pt-10 sm:grid-cols-2 sm:pt-14"
+                >
                   {text.heroNotes.map(([title, detail], index) => (
-                    <div
+                    <motion.div
                       key={title}
+                      initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.5, delay: 0.9 + index * 0.1 }}
                       className={`flex items-center gap-3 rounded-2xl border border-white/15 bg-white/[0.09] px-4 py-3 backdrop-blur-md sm:max-w-[275px] ${index === 1 ? 'sm:ms-auto' : ''}`}
                     >
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d4f36b]/15 text-[#d4f36b]">
@@ -298,32 +365,53 @@ export default function Home() {
                         <span className={`block text-[10px] font-extrabold tracking-[0.13em] text-white uppercase ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}>{title}</span>
                         <span className={`mt-1 block text-xs text-blue-100/80 ${language === 'ur' ? 'font-urdu' : ''}`}>{detail}</span>
                       </span>
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               </div>
-            </section>
+            </motion.section>
 
-            <section id="services" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+            <motion.section
+              id="services"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+              className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+            >
               <div className="mx-auto max-w-7xl">
-                <div className="reveal mx-auto mb-10 max-w-2xl text-center sm:mb-14">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                  className="mx-auto mb-10 max-w-2xl text-center sm:mb-14"
+                >
                   <p className={`text-xs font-extrabold tracking-[0.2em] text-[#267965] uppercase ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}>{text.serviceEyebrow}</p>
                   <h2 className={`mt-3 font-display text-3xl font-semibold tracking-tight text-[#183b50] sm:text-5xl ${language === 'ur' ? 'font-urdu leading-[2]' : ''}`}>{text.serviceHeading}</h2>
                   <p className={`mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base ${language === 'ur' ? 'font-urdu text-base leading-[2.2]' : ''}`}>{text.serviceDescription}</p>
-                </div>
+                </motion.div>
 
-                <div className="grid gap-5 md:grid-cols-3">
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  variants={containerVariants}
+                  className="grid gap-5 md:grid-cols-3"
+                >
                   {text.services.map((service, index) => {
                     const Icon = serviceIcons[index];
                     const style = serviceStyles[index];
                     const tab = ['reports', 'doctors', 'blood'][index];
 
+                    const serviceCardClass = 'group relative min-h-[285px] overflow-hidden rounded-[2rem] border-2 border-[#d5e0e7] bg-white p-6 text-start shadow-[0_16px_44px_rgba(28,64,78,0.07)] transition duration-500 ease-out hover:z-10 hover:-translate-y-3 hover:scale-[1.02] hover:border-[#416f90] hover:shadow-[0_28px_64px_rgba(28,64,78,0.18)] focus-visible:z-10 focus:outline-none focus:ring-2 focus:ring-[#267965] focus:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 sm:p-8';
+
                     return (
-                      <button
+                      <motion.button
                         key={service.title}
                         type="button"
                         onClick={() => openTab(tab)}
-                        className={`reveal group relative min-h-[285px] overflow-hidden rounded-[2rem] border-2 border-[#d5e0e7] bg-white p-6 text-start shadow-[0_16px_44px_rgba(28,64,78,0.07)] transition duration-500 ease-out hover:z-10 hover:-translate-y-3 hover:scale-[1.02] hover:border-[#416f90] hover:shadow-[0_28px_64px_rgba(28,64,78,0.18)] focus-visible:z-10 focus:outline-none focus:ring-2 focus:ring-[#267965] focus:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 sm:p-8`}
+                        whileHover={{ y: -8, scale: 1.02, boxShadow: '0 28px 64px rgba(28,64,78,0.18)' }}
+                        whileTap={{ scale: 0.98 }}
+                        variants={itemVariants}
+                        className={serviceCardClass}
                       >
                         <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${style.icon}`}>
                           <Icon className="h-6 w-6" strokeWidth={1.8} />
@@ -335,12 +423,12 @@ export default function Home() {
                           {service.action}
                           <ArrowUpRight className="h-4 w-4 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
                         </span>
-                      </button>
+                      </motion.button>
                     );
                   })}
-                </div>
+                </motion.div>
               </div>
-            </section>
+            </motion.section>
 
             <section className="overflow-hidden bg-[#e8eef0] px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
               <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
@@ -407,33 +495,56 @@ export default function Home() {
               </div>
             </section>
 
-            <section id="how-it-works" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+            <motion.section
+              id="how-it-works"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+              className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+            >
               <div className="mx-auto max-w-7xl">
-                <div className="reveal mb-10 flex flex-col gap-4 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                  className="mb-10 flex flex-col gap-4 sm:mb-12 sm:flex-row sm:items-end sm:justify-between"
+                >
                   <div className="max-w-2xl">
                     <p className={`text-xs font-extrabold tracking-[0.2em] text-[#267965] uppercase ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}>{text.processEyebrow}</p>
                     <h2 className={`mt-3 font-display text-3xl font-semibold tracking-tight text-[#183b50] sm:text-5xl ${language === 'ur' ? 'font-urdu leading-[2]' : ''}`}>{text.processHeading}</h2>
                   </div>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02, x: 4 }}
+                    whileTap={{ scale: 0.98 }}
                     type="button"
                     onClick={() => openTab('reports')}
                     className={`inline-flex w-fit items-center gap-2 rounded-full border border-[#cbd8d9] bg-white px-5 py-3 text-sm font-bold text-[#183b50] transition hover:border-[#267965] hover:text-[#176d5c] ${language === 'ur' ? 'font-urdu' : ''}`}
                   >
                     {text.processAction}
                     <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
+                  </motion.button>
+                </motion.div>
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  variants={containerVariants}
+                  className="grid gap-4 md:grid-cols-3"
+                >
                   {text.processSteps.map(([number, title, description]) => (
-                    <article key={number} className="reveal rounded-[1.5rem] border border-[#dce5e4] bg-white p-6 shadow-[0_12px_36px_rgba(28,64,78,0.05)] sm:p-8">
+                    <motion.article
+                      key={number}
+                      variants={itemVariants}
+                      whileHover={{ y: -4, boxShadow: '0 20px 40px rgba(28,64,78,0.1)' }}
+                      className="rounded-[1.5rem] border border-[#dce5e4] bg-white p-6 shadow-[0_12px_36px_rgba(28,64,78,0.05)] sm:p-8"
+                    >
                       <span className="font-display text-sm font-bold tracking-[0.16em] text-[#3d8a75]">{number}</span>
                       <h3 className={`mt-7 font-display text-xl font-semibold text-[#183b50] sm:text-2xl ${language === 'ur' ? 'font-urdu' : ''}`}>{title}</h3>
                       <p className={`mt-3 text-sm leading-6 text-slate-600 ${language === 'ur' ? 'font-urdu text-base leading-[2.1]' : ''}`}>{description}</p>
-                    </article>
+                    </motion.article>
                   ))}
-                </div>
+                </motion.div>
               </div>
-            </section>
+            </motion.section>
           </div>
         )}
 
@@ -456,27 +567,48 @@ export default function Home() {
         )}
 
         {activeTab === 'about' && (
-          <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-            <div className="reveal grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
-              <div>
+          <motion.section
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+          >
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={containerVariants}
+              className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16"
+            >
+              <motion.div variants={itemVariants}>
                 <p className={`text-xs font-extrabold tracking-[0.2em] text-[#267965] uppercase ${language === 'ur' ? 'font-urdu tracking-normal' : ''}`}>{text.aboutEyebrow}</p>
                 <h1 className={`mt-4 font-display text-4xl font-semibold leading-tight tracking-tight text-[#183b50] sm:text-5xl ${language === 'ur' ? 'font-urdu leading-[1.8]' : ''}`}>{text.aboutHeading}</h1>
-              </div>
-              <div>
+              </motion.div>
+              <motion.div variants={itemVariants}>
                 <p className={`text-base leading-8 text-slate-600 ${language === 'ur' ? 'font-urdu text-lg leading-[2.2]' : ''}`}>{text.aboutPageDescription}</p>
-                <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  variants={containerVariants}
+                  className="mt-8 grid gap-4 sm:grid-cols-3"
+                >
                   {text.aboutValues.map(([title, description]) => (
-                    <article key={title} className="rounded-2xl border border-[#dce5e4] bg-white p-5 shadow-sm">
+                    <motion.article
+                      key={title}
+                      variants={itemVariants}
+                      whileHover={{ y: -4, boxShadow: '0 20px 40px rgba(28,64,78,0.1)' }}
+                      className="rounded-2xl border border-[#dce5e4] bg-white p-5 shadow-sm"
+                    >
                       <h2 className={`font-display text-lg font-semibold text-[#183b50] ${language === 'ur' ? 'font-urdu' : ''}`}>{title}</h2>
                       <p className={`mt-2 text-sm leading-6 text-slate-600 ${language === 'ur' ? 'font-urdu' : ''}`}>{description}</p>
-                    </article>
+                    </motion.article>
                   ))}
-                </div>
-              </div>
-            </div>
-          </section>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          </motion.section>
         )}
-      </main>
+      </motion.main>
+    </AnimatePresence>
 
       {showBackToTop && (
         <button
