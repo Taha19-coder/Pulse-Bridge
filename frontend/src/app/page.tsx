@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import ReportExplainerView from '@/components/ReportExplainerView';
 import DoctorFinderView from '@/components/DoctorFinderView';
-import BloodNetworkView from '@/components/BloodNetworkView';
 import {
   ArrowRight,
   ArrowUp,
@@ -29,7 +28,7 @@ const copy = {
     heroTitle: 'HEALTHCARE',
     heroSubtitle: 'MADE CLEARER.',
     heroDescription:
-      'Understand your reports, explore doctors, and find blood donor support — all in one place.',
+      'Understand your reports and explore doctors — all in one place.',
     primaryAction: 'Explore services',
     secondaryAction: 'How it works',
     heroNotes: [
@@ -56,11 +55,11 @@ const copy = {
         action: 'Browse doctors',
       },
       {
-        eyebrow: 'CONNECT',
-        title: 'Blood donor support',
+        eyebrow: 'COMMUNICATE',
+        title: 'Eye-blink communication',
         description:
-          'Look for compatible donors or share an urgent blood request with the network.',
-        action: 'Open blood support',
+          'Assistive eye-blink communication for paralyzed users who can only move their eyes.',
+        action: 'Open eye communication',
       },
     ],
     aboutEyebrow: 'About Pulse Bridge',
@@ -70,13 +69,13 @@ const copy = {
     aboutPoints: [
       'Plain-language report guidance',
       'Doctor discovery by your preferences',
-      'Community blood donor coordination',
+      'Eye-blink communication for paralyzed users',
     ],
     aboutAction: 'Learn about Pulse Bridge',
     processEyebrow: 'A simpler journey',
     processHeading: 'A little more clarity, at every step.',
     processSteps: [
-      ['01', 'Choose what you need', 'Open reports, doctors, or blood support.'],
+      ['01', 'Choose what you need', 'Open reports, doctors, or eye communication.'],
       ['02', 'Share the details', 'Add the information needed for your request.'],
       ['03', 'Review your next step', 'Use the results as a guide for what to do next.'],
     ],
@@ -85,7 +84,7 @@ const copy = {
       'Pulse Bridge brings practical digital health tools together in one place. Our goal is to help people understand medical information and find useful care resources, while encouraging them to consult qualified healthcare professionals for medical decisions.',
     aboutValues: [
       ['Clear information', 'Understand reports with plain-language guidance in English or Urdu.'],
-      ['Useful connections', 'Explore doctor listings and blood donor support in one place.'],
+      ['Useful connections', 'Explore doctor listings and eye-blink communication in one place.'],
       ['People-first design', 'Access straightforward tools designed around everyday needs.'],
     ],
     footer:
@@ -399,7 +398,7 @@ export default function Home() {
                   {text.services.map((service, index) => {
                     const Icon = serviceIcons[index];
                     const style = serviceStyles[index];
-                    const tab = ['reports', 'doctors', 'blood'][index];
+                    const tab = ['reports', 'doctors'][index];
 
                     const serviceCardClass = 'group relative min-h-[285px] overflow-hidden rounded-[2rem] border-2 border-[#d5e0e7] bg-white p-6 text-start shadow-[0_16px_44px_rgba(28,64,78,0.07)] transition duration-500 ease-out hover:z-10 hover:-translate-y-3 hover:scale-[1.02] hover:border-[#416f90] hover:shadow-[0_28px_64px_rgba(28,64,78,0.18)] focus-visible:z-10 focus:outline-none focus:ring-2 focus:ring-[#267965] focus:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 sm:p-8';
 
@@ -557,12 +556,6 @@ export default function Home() {
         {activeTab === 'doctors' && (
           <div className="px-4 sm:px-6 lg:px-8">
             <DoctorFinderView />
-          </div>
-        )}
-
-        {activeTab === 'blood' && (
-          <div className="px-4 sm:px-6 lg:px-8">
-            <BloodNetworkView />
           </div>
         )}
 

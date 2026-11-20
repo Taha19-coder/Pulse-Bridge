@@ -55,79 +55,8 @@ class ReportExplanationResponse(BaseModel):
 
 
 # ------------------------------------------------------------------------------
-# 3. BLOOD DONOR MATCHING SCHEMAS
+# 3. DOCTOR RAG SEARCH SCHEMAS
 # ------------------------------------------------------------------------------
-class BloodMatchRequest(BaseModel):
-    recipient_blood_group: str = Field(description="A+, A-, B+, B-, AB+, AB-, O+, O-")
-    city: str
-    area: Optional[str] = None
-    urgency: str = Field(default="Urgent", description="Emergency, Urgent, or Standard")
-    only_available: bool = True
-
-
-class MatchedDonor(BaseModel):
-    donor_code: str
-    full_name: str
-    blood_group: str
-    compatibility_reason: str
-    city: str
-    area: str
-    full_address: str
-    masked_contact: str
-    raw_contact: Optional[str] = None  # Revealed only on explicit user click
-    whatsapp_link: str
-    availability_status: str
-    last_donation_date: Optional[str] = None
-    eligible_now: bool
-    distance_rank: int
-
-
-class BloodMatchResponse(BaseModel):
-    recipient_group: str
-    compatible_donor_groups: List[str]
-    total_matches: int
-    donors: List[MatchedDonor]
-
-
-class DonorRegistrationRequest(BaseModel):
-    full_name: str
-    age: int = Field(ge=18, le=65)
-    gender: str = Field(description="Male, Female, or Other")
-    blood_group: str = Field(description="A+, A-, B+, B-, AB+, AB-, O+, O-")
-    city: str
-    area: Optional[str] = ""
-    address: str
-    contact_number: str
-    availability: str = Field(default="Available")
-    last_donation_date: Optional[str] = None
-    email: Optional[str] = None
-    medical_conditions: Optional[str] = None
-    weight_kg: Optional[float] = None
-    notes: Optional[str] = None
-
-
-class BloodRequestCreate(BaseModel):
-    patient_name: str
-    blood_group_needed: str
-    units_required: int = Field(default=1, ge=1, le=20)
-    city: str
-    hospital_name: str
-    urgency_level: str = Field(default="Urgent")
-    contact_person: str
-    contact_phone: str
-
-
-class BloodRequestResponse(BaseModel):
-    id: str
-    request_code: str
-    patient_name: str
-    blood_group_needed: str
-    units_required: int
-    city: str
-    hospital_name: str
-    urgency_level: str
-    contact_person: str
-    contact_phone: str
     request_status: str
     created_at: str
 

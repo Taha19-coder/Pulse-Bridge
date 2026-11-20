@@ -3,11 +3,6 @@ import {
   DoctorSearchQuery,
   DoctorSearchResponse,
   DoctorFilterMetaResponse,
-  BloodMatchRequest,
-  BloodMatchResponse,
-  DonorRegistrationRequest,
-  BloodRequestCreate,
-  BloodRequestResponse,
   SystemHealthResponse,
   DoctorAssistantChatResponse,
   Language,
@@ -108,50 +103,5 @@ export async function searchDoctors(query: DoctorSearchQuery): Promise<DoctorSea
 export async function getDoctorFilterMeta(): Promise<DoctorFilterMetaResponse> {
   const res = await fetch(`${API_BASE_URL}/doctors/filters/meta`, { cache: 'force-cache' });
   if (!res.ok) throw new Error('Failed to load doctor filter metadata');
-  return res.json();
-}
-
-export async function matchBloodDonors(request: BloodMatchRequest): Promise<BloodMatchResponse> {
-  const res = await fetch(`${API_BASE_URL}/blood/match`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'Failed to search blood donors');
-  }
-
-  return res.json();
-}
-
-export async function registerDonor(data: DonorRegistrationRequest): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE_URL}/blood/donors/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'Failed to register blood donor');
-  }
-
-  return res.json();
-}
-
-export async function broadcastBloodRequest(data: BloodRequestCreate): Promise<BloodRequestResponse> {
-  const res = await fetch(`${API_BASE_URL}/blood/requests`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'Failed to broadcast emergency blood request');
-  }
-
   return res.json();
 }

@@ -2,7 +2,7 @@ import logging
 import re
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Query, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 import httpx
 from backend.core.config import settings
@@ -14,14 +14,8 @@ from backend.models.schemas import (
     DoctorSearchQuery,
     DoctorSearchResponse,
     DoctorFilterMetaResponse,
-    BloodMatchRequest,
-    BloodMatchResponse,
-    DonorRegistrationRequest,
-    BloodRequestCreate,
-    BloodRequestResponse,
 )
 from backend.modules.report.explainer import ReportExplainerService
-from backend.modules.donors.service import BloodDonorService
 from backend.modules.doctors.synthesizer import DoctorRAGService
 from backend.modules.doctors.gemini_client import call_gemini_chat
 from backend.modules.doctors.nvidia_client import call_nvidia_chat
@@ -41,7 +35,6 @@ from backend.modules.eye_comm.schemas import (
     CalibrateResponse,
     EyeCommSessionResponse,
 )
-from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
@@ -61,20 +54,6 @@ _DOCTOR_SEARCH_ACTIONS = re.compile(
 )
 _CARDIOLOGY_TERMS = re.compile(
     r"\b(?:cardio(?:logy|logist|logists)?|cardiac|heart)\b",
-    re.IGNORECASE,
-)
-_BLOOD_GROUP_PATTERN = re.compile(
-    r"(?<![A-Za-z])(?P<group>AB|A|B|O)\s*(?P<rh>[+-]|positive|negative)(?![A-Za-z])",
-    re.IGNORECASE,
-)
-_DONOR_SEARCH_TERMS = re.compile(r"\b(?:donors?|donat(?:e|ion|ing)s?)\b", re.IGNORECASE)
-_COMPATIBLE_DONOR_TERMS = re.compile(
-    r"\b(?:compatible|can\s+donate|donate\s+to|recipient|need|needs|for)\b",
-    re.IGNORECASE,
-)
-_DONOR_CITY_PATTERN = re.compile(
-    r"\b(?:in|near|around)\s+([A-Za-z][A-Za-z -]*?)"
-    r"(?=\s+(?:for|with|who|available|please|and|needed|urgent)\b|[?.!,;]|$)",
     re.IGNORECASE,
 )
 
@@ -122,57 +101,6 @@ def _format_doctor_search_reply(search_result: DoctorSearchResponse, query: Doct
     return "\n".join(lines)
 
 
-def _donor_search_request(user_message: str) -> Optional[Tuple[str, Optional[str], bool]]:
-    if not _DONOR_SEARCH_TERMS.search(user_message):
-        return None
-
-    match = _BLOOD_GROUP_PATTERN.search(user_message)
-    if not match:
-        return None
-
-    rh_factor = match.group("rh").lower()
-    blood_group = f"{match.group('group').upper()}{'+' if rh_factor in {'+', 'positive'} else '-'}"
-    city_match = _DONOR_CITY_PATTERN.search(user_message)
-    city = city_match.group(1).strip() if city_match else None
-    is_compatibility_search = bool(_COMPATIBLE_DONOR_TERMS.search(user_message))
-    return blood_group, city, is_compatibility_search
-
-
-def _format_donor_search_reply(
-    search_result: BloodMatchResponse,
-    blood_group: str,
-    city: Optional[str],
-    is_compatibility_search: bool,
-) -> str:
-    donors = [
-        donor
-        for donor in search_result.donors
-        if donor.eligible_now
-        and (is_compatibility_search or donor.blood_group.upper() == blood_group)
-    ]
-    city_context = f" (prioritized by proximity to {city})" if city else ""
-    if not donors:
-        donor_description = (
-            f"compatible donors for {blood_group}"
-            if is_compatibility_search
-            else f"donors with blood group {blood_group}"
-        )
-        return f"No available, donation-eligible {donor_description} were found{city_context}."
-
-    donor_description = (
-        f"compatible donors for recipient group {blood_group}"
-        if is_compatibility_search
-        else f"donors with blood group {blood_group}"
-    )
-    lines = [f"Available, donation-eligible {donor_description}{city_context}:", ""]
-    for index, donor in enumerate(donors[:10], start=1):
-        lines.append(f"{index}. {donor.full_name} — {donor.blood_group}, {donor.city}")
-    if len(donors) > 10:
-        lines.append(f"\nAnd {len(donors) - 10} more. Open Blood support to view the full donor list.")
-    lines.append("\nContact details are not shown in chat; use Blood support to connect with a donor.")
-    return "\n".join(lines)
-
-
 @router.post(
     "/rag/chat",
     response_model=DoctorAssistantChatResponse,
@@ -182,25 +110,6 @@ async def rag_chat_endpoint(request: DoctorAssistantChatRequest):
     """Answer doctor-directory requests from verified records; use AI for other chat.
     This endpoint is used by the floating chat button in the UI.
     """
-    donor_query = _donor_search_request(request.user_message)
-    if donor_query:
-        blood_group, city, is_compatibility_search = donor_query
-        search_result = BloodDonorService.match_donors(
-            BloodMatchRequest(
-                recipient_blood_group=blood_group,
-                city=city or "All locations",
-                only_available=True,
-            )
-        )
-        return DoctorAssistantChatResponse(
-            reply=_format_donor_search_reply(
-                search_result,
-                blood_group,
-                city,
-                is_compatibility_search,
-            )
-        )
-
     doctor_query = _doctor_search_query(request.user_message)
     if doctor_query:
         search_result = DoctorRAGService.search(doctor_query)
@@ -272,6 +181,7 @@ async def rag_chat_endpoint(request: DoctorAssistantChatRequest):
         status_code=503,
         detail="The AI assistant is temporarily unavailable. Check backend provider logs and try again.",
     )
+
 
 @router.get("/health", response_model=SystemHealthResponse, tags=["Health"])
 def get_system_health():
@@ -350,56 +260,6 @@ def get_doctor_filter_meta():
     Returns unique cities and specialties for UI filter dropdowns.
     """
     return DoctorRAGService.get_filter_meta()
-
-
-# ------------------------------------------------------------------------------
-# 4. BLOOD DONOR MATCHING & REGISTRATION
-# ------------------------------------------------------------------------------
-@router.post("/blood/match", response_model=BloodMatchResponse, tags=["Blood Donor Network"])
-def match_blood_donors(request: BloodMatchRequest):
-    """
-    Finds compatible voluntary donors according to ABO/Rh transfusion rules
-    and proximity ranking (City + Area > City > Other).
-    """
-    try:
-        return BloodDonorService.match_donors(request)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Blood donor matching error: {str(e)}")
-
-
-@router.post("/blood/donors/register", tags=["Blood Donor Network"])
-def register_donor(data: DonorRegistrationRequest):
-    """
-    Enrolls a community member into the voluntary donor registry.
-    """
-    try:
-        res = BloodDonorService.register_donor(data)
-        return {
-            "success": True,
-            "message": "Donor registered successfully and saved to the temporary donor registry sheet.",
-            "data": res,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Donor registration error: {str(e)}")
-
-
-@router.post("/blood/requests", response_model=BloodRequestResponse, tags=["Blood Donor Network"])
-def broadcast_blood_request(data: BloodRequestCreate):
-    """
-    Broadcasts an urgent blood requirement for patient transfusion.
-    """
-    try:
-        return BloodDonorService.create_blood_request(data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Blood request creation error: {str(e)}")
-
-
-@router.get("/blood/requests", response_model=List[BloodRequestResponse], tags=["Blood Donor Network"])
-def list_blood_requests():
-    """
-    Lists open emergency blood requests.
-    """
-    return BloodDonorService.list_blood_requests()
 
 
 # ------------------------------------------------------------------------------
@@ -522,60 +382,13 @@ def get_eye_comm_session(session_id: str):
     return session
 
 
-# ------------------------------------------------------------------------------
-# Eye image capture (save webcam eye frames)
-# ------------------------------------------------------------------------------
-class EyeCaptureRequest(BaseModel):
-    frame_b64: str = Field(description="Base64-encoded JPEG image (may include data URL prefix)")
-    timestamp_ms: float = Field(description="Monotonic timestamp in milliseconds")
-    user_id: str = Field(description="User identifier")
-    label: Optional[str] = Field(default=None, description="Optional user label (e.g., 'eyes open', 'blinking')")
-
-
-class EyeCaptureResponse(BaseModel):
-    capture_id: str
-    file_path: str
-    file_url: str
-    user_id: str
-    timestamp_ms: float
-    label: Optional[str]
-    created_at: str
-
-
-@router.post(
-    "/eye-comm/capture-eye",
-    response_model=EyeCaptureResponse,
-    tags=["Eye-Blink Communication"],
-)
-async def capture_eye_image(request: EyeCaptureRequest):
-    """
-    Capture and save an eye image from the frontend webcam.
-
-    The frontend sends a base64-encoded JPEG frame. The backend saves it to
-    local storage (data/eye_captures/) and returns metadata including a URL
-    to retrieve the image.
-    """
-    try:
-        result = save_eye_capture(
-            frame_b64=request.frame_b64,
-            user_id=request.user_id,
-            timestamp_ms=request.timestamp_ms,
-            label=request.label,
-        )
-        return EyeCaptureResponse(**result)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Eye capture error: {str(e)}")
-
-
 @router.get(
     "/eye-comm/captures",
     tags=["Eye-Blink Communication"],
 )
 def list_eye_captures_endpoint(
-    user_id: Optional[str] = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    user_id: Optional[str] = None,
+    limit: int = Field(default=50, ge=1, le=200),
 ):
     """
     List saved eye captures, newest first.

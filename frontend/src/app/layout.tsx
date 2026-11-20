@@ -4,7 +4,7 @@ import ChatFloatingButton from "../components/ChatFloatingButton";
 
 export const metadata: Metadata = {
   title: "PULSE BRIDGE — AI Healthcare Accessibility Platform",
-  description: "AI Medical Report Explainer, Verified Doctor Discovery (RAG), and Emergency Blood Donor Network for Pakistan. Aligned with UN SDG 03.",
+  description: "AI Medical Report Explainer, Verified Doctor Discovery (RAG), and Eye-Blink Communication for Paralyzed Users. Aligned with UN SDG 03.",
 };
 
 export default function RootLayout({

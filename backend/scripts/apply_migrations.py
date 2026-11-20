@@ -123,7 +123,6 @@ def main():
 
     apply_migration(conn, migrations_dir / "01_extensions_and_profiles.sql", "Migration 01: Extensions & Profiles")
     apply_migration(conn, migrations_dir / "02_doctors_and_pgvector.sql", "Migration 02: Doctors & pgvector")
-    apply_migration(conn, migrations_dir / "03_donors_and_requests.sql", "Migration 03: Donors & Requests")
     apply_migration(conn, migrations_dir / "04_report_records_and_storage.sql", "Migration 04: Reports & Storage")
 
     verify_setup(conn)

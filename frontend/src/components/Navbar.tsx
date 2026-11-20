@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Droplets, Eye, FileText, House, Info, Stethoscope } from 'lucide-react';
+import { Eye, FileText, House, Info, Stethoscope } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface NavbarProps {
@@ -17,7 +17,6 @@ const navItems = [
   { key: 'home', label: 'Home', icon: House },
   { key: 'reports', label: 'Reports', icon: FileText },
   { key: 'doctors', label: 'Doctors', icon: Stethoscope },
-  { key: 'blood', label: 'Blood support', icon: Droplets },
   { key: 'about', label: 'About', icon: Info },
 ];
 

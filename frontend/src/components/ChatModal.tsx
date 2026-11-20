@@ -40,7 +40,7 @@ export default function ChatModal({ onClose }: ChatModalProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       sender: "bot",
-      text: "Hello. I can help explain lab reports, guide you to a doctor, or support urgent blood needs.",
+      text: "Hello. I can help explain lab reports, guide you to a doctor, or assist with eye-blink communication.",
     },
   ]);
   const [isSending, setIsSending] = useState(false);
