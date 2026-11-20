@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Camera, Copy, Eye, Mic, MicOff, Play, Square, X } from "lucide-react";
+import { Camera, Copy, Eye, Mic, MicOff, Play, Square, X, Type, Volume2, VolumeOff } from "lucide-react";
 import { submitBlinkEvents } from "@/lib/eyeComm";
 import { useBlinkDetector } from "@/lib/useBlinkDetector";
 import type { BlinkEventIn } from "@/types";
@@ -17,14 +17,35 @@ import type { BlinkEventIn } from "@/types";
 const DEFAULT_SHORT_MAX_MS = 450;
 const LETTER_GAP_MS = 700;
 const WORD_GAP_MS = 2500;
-// Hands-free commands are long deliberate holds. (The old "3/5 rapid blinks" could
-// never fire: consecutive deliberate blinks are always >200 ms apart.)
-const SPEAK_HOLD_MS = 1500; // eyes shut 1.5 s+  -> speak
+// Hands-free commands are long deliberate holds.
+const SPEAK_HOLD_MS = 1500; // eyes shut 1.5 s+  -> speak composed text
 const CLEAR_HOLD_MS = 2500; // eyes shut 2.5 s+  -> clear current word
+
+// Scanning timing (milliseconds).
+const ROW_SCAN_INTERVAL_MS = 1800; // time a row stays highlighted before auto-advance
+const WORD_SCAN_INTERVAL_MS = 1200; // time a word stays highlighted before auto-advance
+const BLINK_CONFIRM_MS = 400; // min blink duration to count as a selection
+
+// ------------------------------------------------------------------------------
+// Emergency words — organized in rows for row-column scanning.
+// ------------------------------------------------------------------------------
+const EMERGENCY_ROWS: string[][] = [
+  ["Yes", "No", "Water", "Food"],
+  ["Washroom", "Come here", "Help me", "Pain"],
+  ["Doctor", "Nurse", "Family", "Phone"],
+  ["Sleep", "Rest", "TV", "Music"],
+  ["Thank you", "Sorry", "Okay", "Stop"],
+  ["Hot", "Cold", "Hungry", "Thirsty"],
+  ["Good", "Bad", "Better", "Worse"],
+  ["Morning", "Night", "Today", "Tomorrow"],
+];
 
 type AppStatus = "idle" | "camera-ready" | "calibrating" | "active" | "error";
 type EyeState = "open" | "closed" | "unknown";
 type BlinkCommand = "none" | "clear" | "speak";
+
+// Scanning modes.
+type ScanMode = "idle" | "rows" | "words";
 
 // ------------------------------------------------------------------------------
 // Morse code table (international).
@@ -57,15 +78,36 @@ export default function EyeCommBoard() {
   const streamRef = useRef<MediaStream | null>(null);
 
   const blinkStateRef = useRef<{
+    eyeClosed: boolean;
+    blinkStartMs: number | null;
     lastBlinkMs: number | null;
     currentLetter: string;
     currentWord: string;
     composedText: string;
   }>({
+    eyeClosed: false,
+    blinkStartMs: null,
     lastBlinkMs: null,
     currentLetter: "",
     currentWord: "",
     composedText: "",
+  });
+
+  // Scanning refs (fast, no re-render per blink).
+  const scanRef = useRef<{
+    mode: ScanMode;
+    rowIndex: number;
+    wordIndex: number;
+    rowStartMs: number;
+    wordStartMs: number;
+    scanning: boolean;
+  }>({
+    mode: "idle",
+    rowIndex: 0,
+    wordIndex: 0,
+    rowStartMs: 0,
+    wordStartMs: 0,
+    scanning: false,
   });
 
   // --------------------------------------------------------------------------
@@ -79,31 +121,102 @@ export default function EyeCommBoard() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [calibrationTarget, setCalibrationTarget] = useState<EyeState | null>(null);
+  const [composedText, setComposedText] = useState("");
+  const [currentLetter, setCurrentLetter] = useState("");
+  const [currentWord, setCurrentWord] = useState("");
+
+  // Scanning UI state.
+  const [scanMode, setScanMode] = useState<ScanMode>("idle");
+  const [highlightedRow, setHighlightedRow] = useState(-1);
+  const [highlightedWord, setHighlightedWord] = useState(-1);
+  const [isScanning, setIsScanning] = useState(false);
 
   // --------------------------------------------------------------------------
-  // Helpers (declared before use so callbacks never capture stale/undefined values)
-  //
-  // Timing logic lives in a ref (fast, no re-render per blink); what the user SEES
-  // is a state snapshot pushed by refresh().
+  // MediaPipe blink detector hook
   // --------------------------------------------------------------------------
-  const [display, setDisplay] = useState({ text: "", letter: "", word: "" });
+  const {
+    ready: detectorReady,
+    error: detectorError,
+    faceVisible: mpFaceVisible,
+    closure,
+    calibrate,
+  } = useBlinkDetector(videoRef, {
+    enabled: isCameraOn && (status === "active" || status === "calibrating" || scanMode !== "idle"),
+    onBlink: (e) => injectBlink(e.durationMs, e.endMs),
+  });
 
+  const runCalibration = useCallback(async () => {
+    setStatus("calibrating");
+    setError(null);
+    try {
+      await calibrate((phase) => setCalibrationTarget(phase));
+      setCalibrationTarget(null);
+      setStatus("active");
+    } catch (e) {
+      setCalibrationTarget(null);
+      setError(e instanceof Error ? e.message : "Calibration failed");
+      setStatus("camera-ready");
+    }
+  }, [calibrate]);
+
+  // --------------------------------------------------------------------------
+  // Helpers
+  // --------------------------------------------------------------------------
   const reverseMorse = useCallback((pattern: string): string => {
     return REVERSE_MORSE[pattern] || "?";
   }, []);
 
-  const getComposedText = useCallback((): string => {
-    const s = blinkStateRef.current;
-    const inProgress = s.currentWord + (s.currentLetter ? reverseMorse(s.currentLetter) : "");
-    return (s.composedText + (s.composedText && inProgress ? " " : "") + inProgress).trim();
-  }, [reverseMorse]);
+  // --------------------------------------------------------------------------
+  // Scanning: start / stop / select
+  // --------------------------------------------------------------------------
+  const startScanning = useCallback(() => {
+    setScanMode("rows");
+    setIsScanning(true);
+    setHighlightedRow(0);
+    setHighlightedWord(-1);
+    scanRef.current = {
+      mode: "rows",
+      rowIndex: 0,
+      wordIndex: 0,
+      rowStartMs: nowMs(),
+      wordStartMs: 0,
+      scanning: true,
+    };
+  }, []);
 
-  const refresh = useCallback(() => {
-    const s = blinkStateRef.current;
-    setDisplay({ text: getComposedText(), letter: s.currentLetter, word: s.currentWord });
-  }, [getComposedText]);
+  const stopScanning = useCallback(() => {
+    setScanMode("idle");
+    setIsScanning(false);
+    setHighlightedRow(-1);
+    setHighlightedWord(-1);
+    scanRef.current = {
+      mode: "idle",
+      rowIndex: 0,
+      wordIndex: 0,
+      rowStartMs: 0,
+      wordStartMs: 0,
+      scanning: false,
+    };
+  }, []);
 
+  const selectRow = useCallback((rowIdx: number) => {
+    if (rowIdx < 0 || rowIdx >= EMERGENCY_ROWS.length) return;
+    setScanMode("words");
+    setHighlightedRow(rowIdx);
+    setHighlightedWord(0);
+    scanRef.current = {
+      mode: "words",
+      rowIndex: rowIdx,
+      wordIndex: 0,
+      rowStartMs: nowMs(),
+      wordStartMs: nowMs(),
+      scanning: true,
+    };
+  }, []);
+
+  // --------------------------------------------------------------------------
   // Text-to-speech
+  // --------------------------------------------------------------------------
   const speakText = useCallback((text: string) => {
     if (!text || text.trim().length === 0) return;
     setIsSpeaking(true);
@@ -119,93 +232,60 @@ export default function EyeCommBoard() {
     }
   }, []);
 
-  const handleCommand = useCallback(
-    (command: BlinkCommand) => {
-      const s = blinkStateRef.current;
-      if (command === "clear") {
-        s.currentWord = "";
-        s.currentLetter = "";
-      } else if (command === "speak") {
-        // Commit anything still pending so it is both spoken and kept.
-        if (s.currentLetter) {
-          s.currentWord += reverseMorse(s.currentLetter);
-          s.currentLetter = "";
-        }
-        if (s.currentWord) {
-          s.composedText += (s.composedText ? " " : "") + s.currentWord;
-          s.currentWord = "";
-        }
-        s.lastBlinkMs = null;
-        speakText(s.composedText);
-      }
-      refresh();
-    },
-    [reverseMorse, speakText, refresh],
-  );
+  const selectWord = useCallback((rowIdx: number, wordIdx: number) => {
+    const word = EMERGENCY_ROWS[rowIdx]?.[wordIdx];
+    if (!word) return;
+    setComposedText((prev) => (prev ? `${prev} ${word}` : word));
+    setCurrentWord("");
+    setCurrentLetter("");
+    stopScanning();
+    speakText(word);
+  }, [stopScanning, speakText]);
 
   // --------------------------------------------------------------------------
-  // Blink input: one entry point for the camera detector AND the manual buttons
+  // Blink input: one entry point for camera detector AND manual buttons
   // --------------------------------------------------------------------------
   const injectBlink = useCallback(
     (durationMs: number, timestamp?: number) => {
       const ts = timestamp ?? nowMs();
 
       // Long holds are commands, not letters.
-      if (durationMs >= CLEAR_HOLD_MS) return handleCommand("clear");
-      if (durationMs >= SPEAK_HOLD_MS) return handleCommand("speak");
+      if (durationMs >= CLEAR_HOLD_MS) {
+        setComposedText("");
+        setCurrentWord("");
+        setCurrentLetter("");
+        return;
+      }
+      if (durationMs >= SPEAK_HOLD_MS) {
+        if (composedText.trim()) speakText(composedText);
+        setComposedText("");
+        setCurrentWord("");
+        setCurrentLetter("");
+        return;
+      }
 
-      const s = blinkStateRef.current;
-      s.currentLetter += durationMs < DEFAULT_SHORT_MAX_MS ? "." : "-";
-      s.lastBlinkMs = ts;
-      refresh();
-
-      // Optional: mirror to backend. Never block or fail the UI on it.
-      const event: BlinkEventIn = {
-        event_type: "blink_complete",
-        timestamp_ms: ts,
-        duration_ms: durationMs,
-      };
-      void (async () => {
-        try {
-          await submitBlinkEvents({ events: [event], user_id: "web-user", timestamp_ms: ts });
-        } catch (err) {
-          console.warn("Backend event submission failed:", err); // text entry must never depend on this
+      // If scanning, a blink confirms the current highlight.
+      if (isScanning && durationMs >= BLINK_CONFIRM_MS) {
+        if (scanRef.current.mode === "rows") {
+          selectRow(scanRef.current.rowIndex);
+        } else if (scanRef.current.mode === "words") {
+          selectWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
         }
-      })();
+        return;
+      }
+
+      // Otherwise: Morse dot/dash input.
+      const symbol = durationMs < DEFAULT_SHORT_MAX_MS ? "." : "-";
+      const s = blinkStateRef.current;
+      s.currentLetter += symbol;
+      s.lastBlinkMs = ts;
+      setCurrentLetter(s.currentLetter);
     },
-    [handleCommand, refresh],
+    [isScanning, composedText, selectRow, selectWord, speakText],
   );
 
   // --------------------------------------------------------------------------
-  // MediaPipe blink detector hook
-  // --------------------------------------------------------------------------
-  const {
-    ready: detectorReady,
-    error: detectorError,
-    faceVisible: mpFaceVisible,
-    closure,
-    calibrate,
-  } = useBlinkDetector(videoRef, {
-    enabled: isCameraOn && (status === "active" || status === "calibrating"),
-    onBlink: (e) => injectBlink(e.durationMs, e.endMs),
-  });
-
-  const runCalibration = useCallback(async () => {
-    setStatus("calibrating");
-    setError(null);
-    try {
-      await calibrate((phase) => setCalibrationTarget(phase)); // "open" then "closed"
-      setCalibrationTarget(null);
-      setStatus("active");
-    } catch (e) {
-      setCalibrationTarget(null);
-      setError(e instanceof Error ? e.message : "Calibration failed");
-      setStatus("camera-ready");
-    }
-  }, [calibrate]);
-
-  // --------------------------------------------------------------------------
-  // Letter / word gap timing (polling)
+  // Morse letter / word gap timing (polling)
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (status !== "active") return;
@@ -213,28 +293,58 @@ export default function EyeCommBoard() {
       const s = blinkStateRef.current;
       const now = nowMs();
       if (s.lastBlinkMs === null) return;
-      let changed = false;
 
-      // Letter gap: commit the dots/dashes as a character.
+      // Letter gap.
       if (s.currentLetter && now - s.lastBlinkMs >= LETTER_GAP_MS) {
-        s.currentWord += reverseMorse(s.currentLetter);
+        const char = reverseMorse(s.currentLetter);
+        setCurrentWord((prev) => prev + char);
+        s.currentWord += char;
         s.currentLetter = "";
-        changed = true; // NOTE: lastBlinkMs is NOT reset, so the word gap is
-        // measured from the last real blink (2.5 s), not from the letter commit.
+        setCurrentLetter("");
+        s.lastBlinkMs = now;
       }
 
-      // Word gap: commit the word.
-      if (!s.currentLetter && s.currentWord && now - s.lastBlinkMs >= WORD_GAP_MS) {
+      // Word gap.
+      if (s.currentWord && now - s.lastBlinkMs >= WORD_GAP_MS) {
+        setComposedText((prev) => (prev ? `${prev} ${s.currentWord}` : s.currentWord));
         s.composedText += (s.composedText ? " " : "") + s.currentWord;
         s.currentWord = "";
+        setCurrentWord("");
         s.lastBlinkMs = null;
-        changed = true;
       }
-
-      if (changed) refresh();
     }, 100);
     return () => clearInterval(interval);
-  }, [status, reverseMorse, refresh]);
+  }, [status, reverseMorse]);
+
+  // --------------------------------------------------------------------------
+  // Scanning auto-advance timer
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!isScanning) return;
+    const interval = setInterval(() => {
+      const now = nowMs();
+      const s = scanRef.current;
+
+      if (s.mode === "rows") {
+        if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
+          const next = (s.rowIndex + 1) % EMERGENCY_ROWS.length;
+          setHighlightedRow(next);
+          scanRef.current.rowIndex = next;
+          scanRef.current.rowStartMs = now;
+        }
+      } else if (s.mode === "words") {
+        const row = EMERGENCY_ROWS[s.rowIndex];
+        if (!row) return;
+        if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
+          const next = (s.wordIndex + 1) % row.length;
+          setHighlightedWord(next);
+          scanRef.current.wordIndex = next;
+          scanRef.current.wordStartMs = now;
+        }
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isScanning]);
 
   // --------------------------------------------------------------------------
   // Camera lifecycle
@@ -274,16 +384,14 @@ export default function EyeCommBoard() {
     setStatus("idle");
     setEyeState("unknown");
     setFaceDetected(false);
-  }, []);
+    stopScanning();
+  }, [stopScanning]);
 
   const clearText = useCallback(() => {
-    const s = blinkStateRef.current;
-    s.composedText = "";
-    s.currentWord = "";
-    s.currentLetter = "";
-    s.lastBlinkMs = null;
-    refresh();
-  }, [refresh]);
+    setComposedText("");
+    setCurrentWord("");
+    setCurrentLetter("");
+  }, []);
 
   // --------------------------------------------------------------------------
   // Lifecycle
@@ -363,7 +471,8 @@ export default function EyeCommBoard() {
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-[#00D4FF] mb-2">Eye-Blink Communication</h1>
           <p className="text-slate-300">
-            Communicate using eye blinks — detected through your webcam and translated into text.
+            Communicate using eye blinks — blinking selects highlighted words, or use Morse
+            code (short blink = dot, long blink = dash).
           </p>
         </header>
 
@@ -466,35 +575,103 @@ export default function EyeCommBoard() {
             </div>
           </div>
 
-          {/* Right column: composed text + controls */}
+          {/* Right column: scanning keyboard + composed text + controls */}
           <div className="lg:col-span-5 space-y-6">
+            {/* Scanning keyboard */}
+            <div className="bg-slate-900/50 border border-slate-700 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">Emergency Words (Blink to Select)</h3>
+                <span className="text-xs px-2 py-1 rounded bg-[#183f5b] text-[#00D4FF] font-mono">
+                  Scanning
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {EMERGENCY_ROWS.map((row, rowIdx) => (
+                  <div
+                    key={rowIdx}
+                    className={`flex items-center gap-2 mb-2 ${
+                      highlightedRow === rowIdx ? "border-2 border-[#00D4FF] bg-[#00D4FF]/20 rounded-lg p-2 shadow-[0_0_15px_rgba(0,212,255,0.4)]" : "border border-slate-700/50 rounded-lg p-2 hover:bg-slate-800/50 transition"
+                    }`}
+                  >
+                    <span className="text-xs text-slate-400 w-8 text-center">
+                      {rowIdx + 1}.
+                    </span>
+                    {row.map((word, wordIdx) => (
+                      <button
+                        key={word}
+                        onClick={() => selectWord(rowIdx, wordIdx)}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-all duration-200 ${
+                          highlightedRow === rowIdx && highlightedWord === wordIdx
+                            ? "bg-[#00D4FF] text-[#0a192f] shadow-[0_0_12px_rgba(0,212,255,0.6)] scale-105"
+                            : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600/50"
+                        }`}
+                        disabled={!isScanning || scanMode !== "words" || highlightedRow !== rowIdx}
+                      >
+                        {word}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  onClick={isScanning ? stopScanning : startScanning}
+                  className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
+                    isScanning
+                      ? "bg-red-900/50 hover:bg-red-900/80 border border-red-500/50 text-red-300"
+                      : "bg-[#183f5b] hover:bg-[#14507a] text-white"
+                  }`}
+                >
+                  {isScanning ? (
+                    <>
+                      <Square className="h-5 w-5" />
+                      <span>Stop Scanning</span>
+                    </>
+                  ) : (
+                    <>
+                      <Type className="h-5 w-5" />
+                      <span>Start Word Scanning</span>
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-slate-400">
+                  Blink to confirm highlight
+                </p>
+              </div>
+
+              <p className="mt-3 text-xs text-slate-400">
+                How it works: rows highlight one-by-one. Blink when your row is highlighted
+                to select it, then words in that row highlight one-by-one. Blink again to
+                speak the selected word.
+              </p>
+            </div>
+
+            {/* Composed text */}
             <div className="bg-slate-900/50 border border-slate-700 rounded-2xl p-6 shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white">Composed Text</h3>
                 <span className="text-xs px-2 py-1 rounded bg-[#183f5b] text-[#00D4FF] font-mono">
-                  Morse input
+                  Output
                 </span>
               </div>
 
               <div className="relative mb-4">
                 <textarea
-                  value={display.text}
+                  value={composedText}
                   readOnly
                   className="w-full h-32 bg-slate-800 border border-slate-600 rounded-xl p-4 text-xl text-white font-mono focus:outline-none focus:border-[#00D4FF] resize-none"
-                  placeholder="Blink to compose text..."
+                  placeholder="Selected words appear here..."
                   aria-label="Composed text"
                 />
-                <div className="absolute bottom-2 right-2 text-xs text-slate-500 font-mono">
-                  {display.letter} {display.word}
-                </div>
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    const text = display.text;
-                    if (text) {
-                      navigator.clipboard.writeText(text);
+                    if (composedText) {
+                      navigator.clipboard.writeText(composedText);
                     }
                   }}
                   className="flex-1 bg-[#183f5b] hover:bg-[#14507a] text-white px-4 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition"
@@ -503,10 +680,10 @@ export default function EyeCommBoard() {
                   <span>Copy</span>
                 </button>
                 <button
-                  onClick={() => speakText(display.text)}
-                  disabled={isSpeaking || display.text.length === 0}
+                  onClick={() => speakText(composedText)}
+                  disabled={isSpeaking || composedText.length === 0}
                   className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition ${
-                    isSpeaking || display.text.length === 0
+                    isSpeaking || composedText.length === 0
                       ? "bg-slate-700 text-slate-400 cursor-not-allowed"
                       : "bg-[#267965] hover:bg-[#1f6656] text-white"
                   }`}
@@ -532,7 +709,7 @@ export default function EyeCommBoard() {
               </div>
 
               <div className="mt-6 pt-6 border-t border-slate-700">
-                <p className="text-xs text-slate-400 mb-3">Blink Language</p>
+                <p className="text-xs text-slate-400 mb-3">Morse Blink Language</p>
                 <div className="space-y-2 text-xs text-slate-300 font-mono">
                   <div className="flex justify-between">
                     <span>Short blink</span>
@@ -551,12 +728,12 @@ export default function EyeCommBoard() {
                     <span>new word</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Hold eyes shut 2.5 s</span>
-                    <span>clear word</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span>Hold eyes shut 1.5 s</span>
                     <span>speak text</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Hold eyes shut 2.5 s</span>
+                    <span>clear text</span>
                   </div>
                 </div>
               </div>
@@ -584,13 +761,17 @@ export default function EyeCommBoard() {
               </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => handleCommand("clear")}
+                  onClick={() => {
+                    setComposedText("");
+                    setCurrentWord("");
+                    setCurrentLetter("");
+                  }}
                   className="flex-1 bg-red-900/50 hover:bg-red-900/80 border border-red-500/50 text-red-300 py-3 rounded-xl font-semibold transition"
                 >
                   <X className="h-5 w-5" /> <span>Clear</span>
                 </button>
                 <button
-                  onClick={() => handleCommand("speak")}
+                  onClick={() => speakText(composedText)}
                   className="flex-1 bg-[#267965] hover:bg-[#1f6656] text-white py-3 rounded-xl font-semibold transition"
                 >
                   <Mic className="h-5 w-5" /> <span>Speak</span>
@@ -598,6 +779,7 @@ export default function EyeCommBoard() {
               </div>
             </div>
 
+            {/* Camera controls */}
             <div className="bg-slate-900/50 border border-slate-700 rounded-2xl p-6 shadow-xl">
               <h3 className="text-lg font-bold text-white mb-4">Camera Controls</h3>
               <div className="flex gap-3">
@@ -620,7 +802,7 @@ export default function EyeCommBoard() {
                 )}
               </div>
               <p className="mt-3 text-xs text-slate-400">
-                Start the camera, then click &quot;Calibrate Eyes&quot; to set your personal
+                Start the camera, then click "Calibrate Eyes" to set your personal
                 open/closed blink thresholds. After calibration, blink slowly and
                 deliberately (quick natural blinks are ignored on purpose).
               </p>
