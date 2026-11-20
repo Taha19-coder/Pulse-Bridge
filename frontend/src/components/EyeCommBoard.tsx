@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Camera, Copy, Eye, Mic, MicOff, Play, Square, X, Type, Volume2, VolumeOff } from "lucide-react";
+import { Camera, Copy, Eye, Mic, MicOff, Play, Square, X, Type, Volume2, VolumeOff, Keyboard, Bell } from "lucide-react";
 import { submitBlinkEvents } from "@/lib/eyeComm";
 import { useBlinkDetector } from "@/lib/useBlinkDetector";
 import type { BlinkEventIn } from "@/types";
@@ -22,9 +22,9 @@ const SPEAK_HOLD_MS = 1500; // eyes shut 1.5 s+  -> speak composed text
 const CLEAR_HOLD_MS = 2500; // eyes shut 2.5 s+  -> clear current word
 
 // Scanning timing (milliseconds).
-const ROW_SCAN_INTERVAL_MS = 1800; // time a row stays highlighted before auto-advance
-const WORD_SCAN_INTERVAL_MS = 1200; // time a word stays highlighted before auto-advance
-const BLINK_CONFIRM_MS = 400; // min blink duration to count as a selection
+const ROW_SCAN_INTERVAL_MS = 2000; // time a row stays highlighted before auto-advance
+const WORD_SCAN_INTERVAL_MS = 1500; // time a word stays highlighted before auto-advance
+const BLINK_CONFIRM_MS = 300; // min blink duration to count as a selection
 
 // ------------------------------------------------------------------------------
 // Emergency words — organized in rows for row-column scanning.
@@ -40,12 +40,19 @@ const EMERGENCY_ROWS: string[][] = [
   ["Morning", "Night", "Today", "Tomorrow"],
 ];
 
+// QWERTY keyboard rows for scanning selection.
+const KEYBOARD_ROWS: string[][] = [
+  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+  ["Z", "X", "C", "V", "B", "N", "M"],
+  ["SPACE", "BACK", "DONE"],
+];
+
 type AppStatus = "idle" | "camera-ready" | "calibrating" | "active" | "error";
 type EyeState = "open" | "closed" | "unknown";
-type BlinkCommand = "none" | "clear" | "speak";
 
 // Scanning modes.
-type ScanMode = "idle" | "rows" | "words";
+type ScanMode = "idle" | "rows" | "words" | "keyboard";
 
 // ------------------------------------------------------------------------------
 // Morse code table (international).
@@ -69,6 +76,30 @@ Object.entries(MORSE_TABLE).forEach(([char, pattern]) => {
 });
 
 const nowMs = () => performance.now();
+
+// ------------------------------------------------------------------------------
+// Text-to-speech helper
+// ------------------------------------------------------------------------------
+let speechSynthesisAvailable = false;
+try {
+  speechSynthesisAvailable = typeof window !== "undefined" && "speechSynthesis" in window;
+} catch {
+  speechSynthesisAvailable = false;
+}
+
+function speak(text: string): void {
+  if (!text || text.trim().length === 0) return;
+  if (!speechSynthesisAvailable) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn("Speech synthesis failed:", err);
+  }
+}
 
 export default function EyeCommBoard() {
   // --------------------------------------------------------------------------
@@ -130,6 +161,7 @@ export default function EyeCommBoard() {
   const [highlightedRow, setHighlightedRow] = useState(-1);
   const [highlightedWord, setHighlightedWord] = useState(-1);
   const [isScanning, setIsScanning] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   // --------------------------------------------------------------------------
   // MediaPipe blink detector hook
@@ -145,19 +177,33 @@ export default function EyeCommBoard() {
     onBlink: (e) => injectBlink(e.durationMs, e.endMs),
   });
 
+  // --------------------------------------------------------------------------
+  // Calibration with voice announcements
+  // --------------------------------------------------------------------------
   const runCalibration = useCallback(async () => {
     setStatus("calibrating");
     setError(null);
+    setCalibrationTarget("open");
+    speak("Open your eyes");
     try {
-      await calibrate((phase) => setCalibrationTarget(phase));
+      await calibrate((phase) => {
+        setCalibrationTarget(phase);
+        if (phase === "open") {
+          speak("Open your eyes");
+        } else if (phase === "closed") {
+          speak("Close your eyes gently");
+        }
+      });
       setCalibrationTarget(null);
       setStatus("active");
+      speak("Calibration complete. You can now blink to communicate.");
     } catch (e) {
       setCalibrationTarget(null);
       setError(e instanceof Error ? e.message : "Calibration failed");
       setStatus("camera-ready");
+      speak("Calibration failed. Please try again.");
     }
-  }, [calibrate]);
+  }, [calibrate, speak]);
 
   // --------------------------------------------------------------------------
   // Helpers
@@ -167,6 +213,16 @@ export default function EyeCommBoard() {
   }, []);
 
   // --------------------------------------------------------------------------
+  // Text-to-speech
+  // --------------------------------------------------------------------------
+  const speakText = useCallback((text: string) => {
+    if (!text || text.trim().length === 0) return;
+    setIsSpeaking(true);
+    speak(text);
+    setTimeout(() => setIsSpeaking(false), 2000);
+  }, [speak]);
+
+  // --------------------------------------------------------------------------
   // Scanning: start / stop / select
   // --------------------------------------------------------------------------
   const startScanning = useCallback(() => {
@@ -174,6 +230,7 @@ export default function EyeCommBoard() {
     setIsScanning(true);
     setHighlightedRow(0);
     setHighlightedWord(-1);
+    setKeyboardOpen(false);
     scanRef.current = {
       mode: "rows",
       rowIndex: 0,
@@ -182,13 +239,15 @@ export default function EyeCommBoard() {
       wordStartMs: 0,
       scanning: true,
     };
-  }, []);
+    speak("Scanning started. Blink to select.");
+  }, [speak]);
 
   const stopScanning = useCallback(() => {
     setScanMode("idle");
     setIsScanning(false);
     setHighlightedRow(-1);
     setHighlightedWord(-1);
+    setKeyboardOpen(false);
     scanRef.current = {
       mode: "idle",
       rowIndex: 0,
@@ -212,25 +271,8 @@ export default function EyeCommBoard() {
       wordStartMs: nowMs(),
       scanning: true,
     };
-  }, []);
-
-  // --------------------------------------------------------------------------
-  // Text-to-speech
-  // --------------------------------------------------------------------------
-  const speakText = useCallback((text: string) => {
-    if (!text || text.trim().length === 0) return;
-    setIsSpeaking(true);
-    try {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
-    } catch (err) {
-      setIsSpeaking(false);
-      console.warn("Speech synthesis failed:", err);
-    }
-  }, []);
+    speak(`Row ${rowIdx + 1}. Blink to select a word.`);
+  }, [speak]);
 
   const selectWord = useCallback((rowIdx: number, wordIdx: number) => {
     const word = EMERGENCY_ROWS[rowIdx]?.[wordIdx];
@@ -241,6 +283,48 @@ export default function EyeCommBoard() {
     stopScanning();
     speakText(word);
   }, [stopScanning, speakText]);
+
+  const selectKeyboardRow = useCallback((rowIdx: number) => {
+    if (rowIdx < 0 || rowIdx >= KEYBOARD_ROWS.length) return;
+    setScanMode("words");
+    setHighlightedRow(rowIdx);
+    setHighlightedWord(0);
+    scanRef.current = {
+      mode: "words",
+      rowIndex: rowIdx,
+      wordIndex: 0,
+      rowStartMs: nowMs(),
+      wordStartMs: nowMs(),
+      scanning: true,
+    };
+    speak(`Keyboard row ${rowIdx + 1}. Blink to select a key.`);
+  }, [speak]);
+
+  const selectKeyboardKey = useCallback((rowIdx: number, keyIdx: number) => {
+    const key = KEYBOARD_ROWS[rowIdx]?.[keyIdx];
+    if (!key) return;
+
+    if (key === "SPACE") {
+      setComposedText((prev) => (prev ? `${prev} ` : prev));
+      setCurrentWord("");
+      setCurrentLetter("");
+    } else if (key === "BACK") {
+      setComposedText((prev) => prev.slice(0, -1));
+      setCurrentWord("");
+      setCurrentLetter("");
+    } else if (key === "DONE") {
+      stopScanning();
+      speakText(composedText || "Done");
+      return;
+    } else {
+      setCurrentLetter((prev) => prev + key);
+      setCurrentWord((prev) => prev + key);
+      setComposedText((prev) => (prev ? `${prev} ${key}` : key));
+    }
+
+    stopScanning();
+    speakText(key);
+  }, [composedText, stopScanning, speakText]);
 
   // --------------------------------------------------------------------------
   // Blink input: one entry point for camera detector AND manual buttons
@@ -254,6 +338,7 @@ export default function EyeCommBoard() {
         setComposedText("");
         setCurrentWord("");
         setCurrentLetter("");
+        speak("Cleared");
         return;
       }
       if (durationMs >= SPEAK_HOLD_MS) {
@@ -269,7 +354,11 @@ export default function EyeCommBoard() {
         if (scanRef.current.mode === "rows") {
           selectRow(scanRef.current.rowIndex);
         } else if (scanRef.current.mode === "words") {
-          selectWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          if (keyboardOpen) {
+            selectKeyboardKey(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          } else {
+            selectWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          }
         }
         return;
       }
@@ -281,7 +370,16 @@ export default function EyeCommBoard() {
       s.lastBlinkMs = ts;
       setCurrentLetter(s.currentLetter);
     },
-    [isScanning, composedText, selectRow, selectWord, speakText],
+    [
+      isScanning,
+      composedText,
+      keyboardOpen,
+      selectRow,
+      selectWord,
+      selectKeyboardRow,
+      selectKeyboardKey,
+      speakText,
+    ],
   );
 
   // --------------------------------------------------------------------------
@@ -327,13 +425,14 @@ export default function EyeCommBoard() {
 
       if (s.mode === "rows") {
         if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
-          const next = (s.rowIndex + 1) % EMERGENCY_ROWS.length;
+          const next = (s.rowIndex + 1) % (keyboardOpen ? KEYBOARD_ROWS.length : EMERGENCY_ROWS.length);
           setHighlightedRow(next);
           scanRef.current.rowIndex = next;
           scanRef.current.rowStartMs = now;
         }
       } else if (s.mode === "words") {
-        const row = EMERGENCY_ROWS[s.rowIndex];
+        const rows = keyboardOpen ? KEYBOARD_ROWS : EMERGENCY_ROWS;
+        const row = rows[s.rowIndex];
         if (!row) return;
         if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
           const next = (s.wordIndex + 1) % row.length;
@@ -344,7 +443,7 @@ export default function EyeCommBoard() {
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [isScanning]);
+  }, [isScanning, keyboardOpen]);
 
   // --------------------------------------------------------------------------
   // Camera lifecycle
@@ -580,14 +679,16 @@ export default function EyeCommBoard() {
             {/* Scanning keyboard */}
             <div className="bg-slate-900/50 border border-slate-700 rounded-2xl p-6 shadow-xl">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">Emergency Words (Blink to Select)</h3>
+                <h3 className="text-lg font-bold text-white">
+                  {keyboardOpen ? "Keyboard (Blink to Select)" : "Emergency Words (Blink to Select)"}
+                </h3>
                 <span className="text-xs px-2 py-1 rounded bg-[#183f5b] text-[#00D4FF] font-mono">
                   Scanning
                 </span>
               </div>
 
               <div className="space-y-2">
-                {EMERGENCY_ROWS.map((row, rowIdx) => (
+                {(keyboardOpen ? KEYBOARD_ROWS : EMERGENCY_ROWS).map((row, rowIdx) => (
                   <div
                     key={rowIdx}
                     className={`flex items-center gap-2 mb-2 ${
@@ -600,7 +701,7 @@ export default function EyeCommBoard() {
                     {row.map((word, wordIdx) => (
                       <button
                         key={word}
-                        onClick={() => selectWord(rowIdx, wordIdx)}
+                        onClick={() => (keyboardOpen ? selectKeyboardKey(rowIdx, wordIdx) : selectWord(rowIdx, wordIdx))}
                         className={`px-3 py-2 rounded text-sm font-medium transition-all duration-200 ${
                           highlightedRow === rowIdx && highlightedWord === wordIdx
                             ? "bg-[#00D4FF] text-[#0a192f] shadow-[0_0_12px_rgba(0,212,255,0.6)] scale-105"
@@ -617,7 +718,14 @@ export default function EyeCommBoard() {
 
               <div className="mt-4 flex items-center gap-3">
                 <button
-                  onClick={isScanning ? stopScanning : startScanning}
+                  onClick={() => {
+                    if (isScanning) {
+                      stopScanning();
+                    } else {
+                      setKeyboardOpen(false);
+                      startScanning();
+                    }
+                  }}
                   className={`flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 ${
                     isScanning
                       ? "bg-red-900/50 hover:bg-red-900/80 border border-red-500/50 text-red-300"
@@ -635,6 +743,18 @@ export default function EyeCommBoard() {
                       <span>Start Word Scanning</span>
                     </>
                   )}
+                </button>
+                <button
+                  onClick={() => {
+                    setKeyboardOpen(!keyboardOpen);
+                    if (!isScanning) {
+                      startScanning();
+                    }
+                  }}
+                  className="flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white"
+                >
+                  <Keyboard className="h-5 w-5" />
+                  <span>{keyboardOpen ? "Emergency Words" : "Keyboard"}</span>
                 </button>
                 <p className="text-xs text-slate-400">
                   Blink to confirm highlight
