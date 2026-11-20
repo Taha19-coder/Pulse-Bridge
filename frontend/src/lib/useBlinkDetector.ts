@@ -105,18 +105,25 @@ export function useBlinkDetector(
       raf = requestAnimationFrame(tick);
       const video = videoRef.current;
       const lm = landmarkerRef.current;
-      if (!video || !lm || video.readyState < 2) return;
+      if (!video || !lm) return;
+      if (video.readyState < 2 || video.paused || video.ended) return;
       if (video.currentTime === lastVideoTimeRef.current) return;
       lastVideoTimeRef.current = video.currentTime;
 
       const now = performance.now();
-      const result = lm.detectForVideo(video, now);
-      const cats = result.faceBlendshapes?.[0]?.categories;
+      let result: any = null;
+      try {
+        result = lm.detectForVideo(video, now);
+      } catch (err) {
+        console.warn("MediaPipe detectForVideo error:", err);
+        return;
+      }
+      const cats = result?.faceBlendshapes?.[0]?.categories;
 
       let score: number | null = null;
       if (cats) {
-        const left = cats.find((c) => c.categoryName === "eyeBlinkLeft")?.score;
-        const right = cats.find((c) => c.categoryName === "eyeBlinkRight")?.score;
+        const left = cats.find((c: any) => c.categoryName === "eyeBlinkLeft")?.score;
+        const right = cats.find((c: any) => c.categoryName === "eyeBlinkRight")?.score;
         if (left !== undefined && right !== undefined) score = (left + right) / 2;
       }
 

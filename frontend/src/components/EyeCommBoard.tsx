@@ -34,10 +34,6 @@ const EMERGENCY_ROWS: string[][] = [
   ["Washroom", "Come here", "Help me", "Pain"],
   ["Doctor", "Nurse", "Family", "Phone"],
   ["Sleep", "Rest", "TV", "Music"],
-  ["Thank you", "Sorry", "Okay", "Stop"],
-  ["Hot", "Cold", "Hungry", "Thirsty"],
-  ["Good", "Bad", "Better", "Worse"],
-  ["Morning", "Night", "Today", "Tomorrow"],
 ];
 
 // QWERTY keyboard rows for scanning selection.
@@ -49,7 +45,7 @@ const KEYBOARD_ROWS: string[][] = [
 ];
 
 type AppStatus = "idle" | "camera-ready" | "calibrating" | "active" | "error";
-type EyeState = "open" | "closed" | "unknown";
+type EyeState = "open" | "closed" | "unknown" | "--";
 
 // Scanning modes.
 type ScanMode = "idle" | "rows" | "words" | "keyboard";
@@ -146,7 +142,7 @@ export default function EyeCommBoard() {
   // --------------------------------------------------------------------------
   const [status, setStatus] = useState<AppStatus>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [eyeState, setEyeState] = useState<EyeState>("unknown");
+  const [eyeState, setEyeState] = useState<EyeState>("--");
   const [faceDetected, setFaceDetected] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -230,7 +226,6 @@ export default function EyeCommBoard() {
     setIsScanning(true);
     setHighlightedRow(0);
     setHighlightedWord(-1);
-    setKeyboardOpen(false);
     scanRef.current = {
       mode: "rows",
       rowIndex: 0,
@@ -239,8 +234,8 @@ export default function EyeCommBoard() {
       wordStartMs: 0,
       scanning: true,
     };
-    speak("Scanning started. Blink to select.");
-  }, [speak]);
+    speak(keyboardOpen ? "Keyboard scanning started. Blink to select a key." : "Scanning started. Blink to select a word.");
+  }, [speak, keyboardOpen]);
 
   const stopScanning = useCallback(() => {
     setScanMode("idle");
@@ -603,13 +598,13 @@ export default function EyeCommBoard() {
               <div className="mt-6 grid grid-cols-3 gap-4">
                 <StatusCard
                   label="Face"
-                  value={faceDetected ? "Detected" : "Not found"}
-                  active={faceDetected}
+                  value={faceDetected ? "Detected" : (isCameraOn ? "No face" : "Off")}
+                  active={faceDetected && isCameraOn}
                 />
                 <StatusCard
                   label="Eyes"
-                  value={eyeState}
-                  active={eyeState === "open"}
+                  value={isCameraOn ? (eyeState === "open" ? "Open" : eyeState === "closed" ? "Closed" : "--") : "Off"}
+                  active={isCameraOn && eyeState === "open"}
                 />
                 <StatusCard
                   label="Camera"
@@ -746,10 +741,25 @@ export default function EyeCommBoard() {
                 </button>
                 <button
                   onClick={() => {
-                    setKeyboardOpen(!keyboardOpen);
-                    if (!isScanning) {
-                      startScanning();
-                    }
+                    setKeyboardOpen((prev) => {
+                      const next = !prev;
+                      if (isScanning) {
+                        // Restart scanning with new mode
+                        setScanMode("rows");
+                        setHighlightedRow(0);
+                        setHighlightedWord(-1);
+                        scanRef.current = {
+                          mode: "rows",
+                          rowIndex: 0,
+                          wordIndex: 0,
+                          rowStartMs: nowMs(),
+                          wordStartMs: 0,
+                          scanning: true,
+                        };
+                        speak(next ? "Keyboard mode. Blink to select a key." : "Emergency words mode. Blink to select a word.");
+                      }
+                      return next;
+                    });
                   }}
                   className="flex-1 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white"
                 >
