@@ -272,6 +272,8 @@ export default function EyeCommBoard() {
   }, [speak]);
 
   const selectTopRow = useCallback((rowIdx: number) => {
+    // Entering a sub-menu starts at ROW level: lines highlight one by one from
+    // the top, and a blink on a line then starts highlighting its words/keys.
     if (rowIdx === 0) {
       // Emergency Words
       setScanMode("emergency");
@@ -285,7 +287,7 @@ export default function EyeCommBoard() {
         wordStartMs: 0,
         scanning: true,
       };
-      speak("Emergency words. Blink to select a word.");
+      speak("Emergency words. Blink to select a line.");
     } else if (rowIdx === 1) {
       // Keyboard
       setScanMode("keyboard");
@@ -299,7 +301,7 @@ export default function EyeCommBoard() {
         wordStartMs: 0,
         scanning: true,
       };
-      speak("Keyboard. Blink to select a key.");
+      speak("Keyboard. Blink to select a line.");
     }
   }, [speak]);
 
@@ -309,7 +311,7 @@ export default function EyeCommBoard() {
     setComposedText((prev) => (prev ? `${prev} ${word}` : word));
     setCurrentWord("");
     setCurrentLetter("");
-    // Return to row highlighting — whole line highlights again
+    // Word chosen: go back to row scanning, restarting from the TOP line
     setScanMode("emergency");
     setHighlightedRow(0);
     setHighlightedWord(-1);
@@ -356,7 +358,7 @@ export default function EyeCommBoard() {
       setComposedText((prev) => (prev ? `${prev} ${key}` : key));
     }
 
-    // Return to row highlighting — whole line highlights again
+    // Key chosen: go back to row scanning, restarting from the TOP line
     setScanMode("keyboard");
     setHighlightedRow(0);
     setHighlightedWord(-1);
@@ -399,11 +401,12 @@ export default function EyeCommBoard() {
         if (scanRef.current.mode === "top") {
           selectTopRow(scanRef.current.rowIndex);
         } else if (scanRef.current.mode === "emergency") {
-          // Blink on Back row goes to top level
-          if (scanRef.current.rowIndex >= EMERGENCY_ROWS.length) {
-            goToTopLevel();
-          } else if (scanRef.current.wordIndex >= 0) {
+          // Blink on highlighted row starts word highlighting; blink on word selects it
+          if (scanRef.current.wordIndex >= 0) {
             selectEmergencyWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          } else if (scanRef.current.rowIndex >= EMERGENCY_ROWS.length) {
+            // The scannable "Back" row was selected
+            goToTopLevel();
           } else {
             // Row is highlighted — start highlighting words from index 0
             setHighlightedWord(0);
@@ -412,11 +415,12 @@ export default function EyeCommBoard() {
             speak("Row selected. Blink to choose a word.");
           }
         } else if (scanRef.current.mode === "keyboard") {
-          // Blink on Back row goes to top level
-          if (scanRef.current.rowIndex >= KEYBOARD_ROWS.length) {
-            goToTopLevel();
-          } else if (scanRef.current.wordIndex >= 0) {
+          // Blink on highlighted row starts key highlighting; blink on key selects it
+          if (scanRef.current.wordIndex >= 0) {
             selectKeyboardKey(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          } else if (scanRef.current.rowIndex >= KEYBOARD_ROWS.length) {
+            // The scannable "Back" row was selected
+            goToTopLevel();
           } else {
             // Row is highlighted — start highlighting keys from index 0
             setHighlightedWord(0);
@@ -494,22 +498,19 @@ export default function EyeCommBoard() {
           scanRef.current.rowIndex = next;
           scanRef.current.rowStartMs = now;
         }
-      } else if (s.mode === "emergency") {
-        // Only advance words within the selected row — rows stay fixed
-        // If wordIndex is -1, row is highlighted — wait for user to blink on row
-        if (s.wordIndex >= 0 && now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
-          const row = EMERGENCY_ROWS[s.rowIndex];
-          if (!row) return;
-          const next = (s.wordIndex + 1) % row.length;
-          setHighlightedWord(next);
-          scanRef.current.wordIndex = next;
-          scanRef.current.wordStartMs = now;
-        }
-      } else if (s.mode === "keyboard") {
-        // Only advance words within the selected row — rows stay fixed
-        // If wordIndex is -1, row is highlighted — wait for user to blink on row
-        if (s.wordIndex >= 0 && now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
-          const row = KEYBOARD_ROWS[s.rowIndex];
+      } else if (s.mode === "emergency" || s.mode === "keyboard") {
+        const rows = s.mode === "emergency" ? EMERGENCY_ROWS : KEYBOARD_ROWS;
+        if (s.wordIndex < 0) {
+          // ROW level: lines highlight top -> bottom (plus the Back row), then wrap.
+          if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
+            const next = (s.rowIndex + 1) % (rows.length + 1);
+            setHighlightedRow(next);
+            scanRef.current.rowIndex = next;
+            scanRef.current.rowStartMs = now;
+          }
+        } else if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
+          // WORD level: words/keys of the selected row highlight one by one.
+          const row = rows[s.rowIndex];
           if (!row) return;
           const next = (s.wordIndex + 1) % row.length;
           setHighlightedWord(next);
@@ -970,76 +971,6 @@ export default function EyeCommBoard() {
                   className="bg-red-900/50 hover:bg-red-900/80 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl font-semibold transition"
                 >
                   <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-slate-700">
-                <p className="text-xs text-slate-400 mb-3">Morse Blink Language</p>
-                <div className="space-y-2 text-xs text-slate-300 font-mono">
-                  <div className="flex justify-between">
-                    <span>Short blink</span>
-                    <span>· (dot)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Long blink (hold closed)</span>
-                    <span>– (dash)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Gap ~0.7s</span>
-                    <span>new letter</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Gap ~2.5s</span>
-                    <span>new word</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Hold eyes shut 1.5 s</span>
-                    <span>speak text</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Hold eyes shut 2.5 s</span>
-                    <span>clear text</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Manual blink input — always works, no camera needed */}
-            <div className="bg-slate-900/50 border border-slate-700 rounded-2xl p-6 shadow-xl">
-              <h3 className="text-lg font-bold text-white mb-4">Manual Blink Input</h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Use these buttons to simulate blinks (works without camera):
-              </p>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <button
-                  onClick={() => injectBlink(200)}
-                  className="bg-[#183f5b] hover:bg-[#14507a] text-white py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2"
-                >
-                  <span className="text-[#00D4FF]">·</span> <span>Dot (short)</span>
-                </button>
-                <button
-                  onClick={() => injectBlink(600)}
-                  className="bg-[#183f5b] hover:bg-[#14507a] text-white py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2"
-                >
-                  <span className="text-[#00D4FF]">–</span> <span>Dash (long)</span>
-                </button>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setComposedText("");
-                    setCurrentWord("");
-                    setCurrentLetter("");
-                  }}
-                  className="flex-1 bg-red-900/50 hover:bg-red-900/80 border border-red-500/50 text-red-300 py-3 rounded-xl font-semibold transition"
-                >
-                  <X className="h-5 w-5" /> <span>Clear</span>
-                </button>
-                <button
-                  onClick={() => speakText(composedText)}
-                  className="flex-1 bg-[#267965] hover:bg-[#1f6656] text-white py-3 rounded-xl font-semibold transition"
-                >
-                  <Mic className="h-5 w-5" /> <span>Speak</span>
                 </button>
               </div>
             </div>
