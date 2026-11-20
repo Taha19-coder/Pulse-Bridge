@@ -309,7 +309,7 @@ export default function EyeCommBoard() {
     setComposedText((prev) => (prev ? `${prev} ${word}` : word));
     setCurrentWord("");
     setCurrentLetter("");
-    // Return to row scanning (not top level) — rows keep highlighting
+    // Return to row scanning — rows keep highlighting
     setScanMode("emergency");
     setHighlightedRow(rowIdx);
     setHighlightedWord(-1);
@@ -356,7 +356,7 @@ export default function EyeCommBoard() {
       setComposedText((prev) => (prev ? `${prev} ${key}` : key));
     }
 
-    // Return to row scanning (not top level) — rows keep highlighting
+    // Return to row scanning — rows keep highlighting
     setScanMode("keyboard");
     setHighlightedRow(rowIdx);
     setHighlightedWord(-1);
@@ -370,10 +370,6 @@ export default function EyeCommBoard() {
     };
     speakText(key);
   }, [composedText, speakText]);
-
-  const goToTopLevelFromScan = useCallback(() => {
-    goToTopLevel();
-  }, [goToTopLevel]);
 
   // --------------------------------------------------------------------------
   // Blink input: one entry point for camera detector AND manual buttons
@@ -403,17 +399,13 @@ export default function EyeCommBoard() {
         if (scanRef.current.mode === "top") {
           selectTopRow(scanRef.current.rowIndex);
         } else if (scanRef.current.mode === "emergency") {
-          // Back button is at rowIndex === EMERGENCY_ROWS.length
-          if (scanRef.current.rowIndex >= EMERGENCY_ROWS.length) {
-            goToTopLevel();
-          } else {
+          // Blink on highlighted word selects it
+          if (scanRef.current.wordIndex >= 0) {
             selectEmergencyWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
           }
         } else if (scanRef.current.mode === "keyboard") {
-          // Back button is at rowIndex === KEYBOARD_ROWS.length
-          if (scanRef.current.rowIndex >= KEYBOARD_ROWS.length) {
-            goToTopLevel();
-          } else {
+          // Blink on highlighted key selects it
+          if (scanRef.current.wordIndex >= 0) {
             selectKeyboardKey(scanRef.current.rowIndex, scanRef.current.wordIndex);
           }
         }
@@ -486,20 +478,24 @@ export default function EyeCommBoard() {
           scanRef.current.rowStartMs = now;
         }
       } else if (s.mode === "emergency") {
-        const totalRows = EMERGENCY_ROWS.length + 1; // +1 for Back button
-        if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
-          const next = (s.rowIndex + 1) % totalRows;
-          setHighlightedRow(next);
-          scanRef.current.rowIndex = next;
-          scanRef.current.rowStartMs = now;
+        // Only advance words within the selected row — rows stay fixed
+        if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
+          const row = EMERGENCY_ROWS[s.rowIndex];
+          if (!row) return;
+          const next = (s.wordIndex + 1) % row.length;
+          setHighlightedWord(next);
+          scanRef.current.wordIndex = next;
+          scanRef.current.wordStartMs = now;
         }
       } else if (s.mode === "keyboard") {
-        const totalRows = KEYBOARD_ROWS.length + 1; // +1 for Back button
-        if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
-          const next = (s.rowIndex + 1) % totalRows;
-          setHighlightedRow(next);
-          scanRef.current.rowIndex = next;
-          scanRef.current.rowStartMs = now;
+        // Only advance words within the selected row — rows stay fixed
+        if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
+          const row = KEYBOARD_ROWS[s.rowIndex];
+          if (!row) return;
+          const next = (s.wordIndex + 1) % row.length;
+          setHighlightedWord(next);
+          scanRef.current.wordIndex = next;
+          scanRef.current.wordStartMs = now;
         }
       }
     }, 100);
