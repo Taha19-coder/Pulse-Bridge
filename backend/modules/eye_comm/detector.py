@@ -36,6 +36,8 @@ class EyeLandmarks:
     right_eye: np.ndarray  # shape (2, 2)
     face_detected: bool
     eye_openness: Optional[float] = None  # 0 = closed, 1 = fully open (normalized)
+    ear_left: Optional[float] = None
+    ear_right: Optional[float] = None
 
 
 @dataclass

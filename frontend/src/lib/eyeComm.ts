@@ -3,10 +3,7 @@ import {
   BlinkEventsResponse,
   CalibrateRequest,
   CalibrateResponse,
-  EyeCaptureRequest,
-  EyeCaptureResponse,
   EyeCommSessionResponse,
-  FrameDetectRequest,
 } from '@/types';
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
@@ -53,39 +50,4 @@ export async function checkEyeCommHealth(): Promise<{ status: string }> {
   return res.json() as Promise<{ status: string }>;
 }
 
-export async function detectBlinkFromFrame(
-  request: FrameDetectRequest,
-): Promise<BlinkEventsResponse> {
-  const res = await fetch(`${API_BASE_URL}/eye-comm/frame`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  });
-  return handleResponse(res) as Promise<BlinkEventsResponse>;
-}
 
-export async function captureEyeImage(
-  request: EyeCaptureRequest,
-): Promise<EyeCaptureResponse> {
-  const res = await fetch(`${API_BASE_URL}/eye-comm/capture-eye`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  });
-  return handleResponse(res) as Promise<EyeCaptureResponse>;
-}
-
-export async function listEyeCaptures(
-  userId?: string,
-  limit = 50,
-): Promise<{ captures: EyeCaptureResponse[]; total: number }> {
-  const url = new URL(`${API_BASE_URL}/eye-comm/captures`);
-  if (userId) url.searchParams.set('user_id', userId);
-  url.searchParams.set('limit', String(limit));
-  const res = await fetch(url.toString(), { cache: 'no-store' });
-  return handleResponse(res) as Promise<{ captures: EyeCaptureResponse[]; total: number }>;
-}
-
-export async function getEyeCaptureImage(captureId: string): Promise<string> {
-  return `${API_BASE_URL}/eye-comm/captures/${captureId}/image`;
-}

@@ -208,25 +208,3 @@ export interface BlinkEventsResponse {
   session: EyeCommSessionResponse | null;
 }
 
-export interface FrameDetectRequest {
-  frame_b64: string;
-  timestamp_ms: number;
-  user_id?: string;
-}
-
-export interface EyeCaptureRequest {
-  frame_b64: string;
-  timestamp_ms: number;
-  user_id: string;
-  label?: string;
-}
-
-export interface EyeCaptureResponse {
-  capture_id: string;
-  file_path: string;
-  file_url: string;
-  user_id: string;
-  timestamp_ms: number;
-  label?: string;
-  created_at: string;
-}
