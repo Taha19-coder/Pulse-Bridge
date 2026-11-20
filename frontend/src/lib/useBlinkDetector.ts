@@ -53,6 +53,7 @@ export function useBlinkDetector(
   const collectRef = useRef<number[] | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const lastUiUpdateRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     onBlinkRef.current = onBlink;
@@ -73,14 +74,14 @@ export function useBlinkDetector(
         } catch {
           lm = await createLandmarker("CPU");
         }
-        if (cancelled) {
+        if (cancelled || !isMountedRef.current) {
           lm.close();
           return;
         }
         landmarkerRef.current = lm;
         setReady(true);
       } catch (e) {
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setError(
             `Could not load the face model (${e instanceof Error ? e.message : String(e)}). ` +
               `Check that ${MODEL_PATH} exists.`,
@@ -105,7 +106,7 @@ export function useBlinkDetector(
       raf = requestAnimationFrame(tick);
       const video = videoRef.current;
       const lm = landmarkerRef.current;
-      if (!video || !lm) return;
+      if (!video || !lm || !isMountedRef.current) return;
       if (video.readyState < 2 || video.paused || video.ended) return;
       if (video.currentTime === lastVideoTimeRef.current) return;
       lastVideoTimeRef.current = video.currentTime;
@@ -165,6 +166,16 @@ export function useBlinkDetector(
     },
     [machine],
   );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      landmarkerRef.current?.close();
+      landmarkerRef.current = null;
+    };
+  }, []);
 
   return { ready, error, faceVisible, closure, thresholds, calibrate };
 }
