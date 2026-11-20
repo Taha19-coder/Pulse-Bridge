@@ -239,7 +239,7 @@ export default function EyeCommBoard() {
   }, [speak]);
 
   // --------------------------------------------------------------------------
-  // Scanning: go to top level / select
+  // Scanning navigation
   // --------------------------------------------------------------------------
   const stopScanning = useCallback(() => {
     setScanMode("idle");
@@ -309,9 +309,20 @@ export default function EyeCommBoard() {
     setComposedText((prev) => (prev ? `${prev} ${word}` : word));
     setCurrentWord("");
     setCurrentLetter("");
-    goToTopLevel();
+    // Return to row scanning (not top level) — rows keep highlighting
+    setScanMode("emergency");
+    setHighlightedRow(rowIdx);
+    setHighlightedWord(-1);
+    scanRef.current = {
+      mode: "emergency",
+      rowIndex: rowIdx,
+      wordIndex: 0,
+      rowStartMs: nowMs(),
+      wordStartMs: 0,
+      scanning: true,
+    };
     speakText(word);
-  }, [goToTopLevel, speakText]);
+  }, [speakText]);
 
   const selectKeyboardKey = useCallback((rowIdx: number, keyIdx: number) => {
     const key = KEYBOARD_ROWS[rowIdx]?.[keyIdx];
@@ -326,7 +337,17 @@ export default function EyeCommBoard() {
       setCurrentWord("");
       setCurrentLetter("");
     } else if (key === "DONE") {
-      goToTopLevel();
+      setScanMode("keyboard");
+      setHighlightedRow(rowIdx);
+      setHighlightedWord(-1);
+      scanRef.current = {
+        mode: "keyboard",
+        rowIndex: rowIdx,
+        wordIndex: 0,
+        rowStartMs: nowMs(),
+        wordStartMs: 0,
+        scanning: true,
+      };
       speakText(composedText || "Done");
       return;
     } else {
@@ -335,9 +356,20 @@ export default function EyeCommBoard() {
       setComposedText((prev) => (prev ? `${prev} ${key}` : key));
     }
 
-    goToTopLevel();
+    // Return to row scanning (not top level) — rows keep highlighting
+    setScanMode("keyboard");
+    setHighlightedRow(rowIdx);
+    setHighlightedWord(-1);
+    scanRef.current = {
+      mode: "keyboard",
+      rowIndex: rowIdx,
+      wordIndex: 0,
+      rowStartMs: nowMs(),
+      wordStartMs: 0,
+      scanning: true,
+    };
     speakText(key);
-  }, [composedText, goToTopLevel, speakText]);
+  }, [composedText, speakText]);
 
   // --------------------------------------------------------------------------
   // Blink input: one entry point for camera detector AND manual buttons
