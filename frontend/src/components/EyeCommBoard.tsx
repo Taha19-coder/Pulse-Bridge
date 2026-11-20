@@ -371,6 +371,10 @@ export default function EyeCommBoard() {
     speakText(key);
   }, [composedText, speakText]);
 
+  const goToTopLevelFromScan = useCallback(() => {
+    goToTopLevel();
+  }, [goToTopLevel]);
+
   // --------------------------------------------------------------------------
   // Blink input: one entry point for camera detector AND manual buttons
   // --------------------------------------------------------------------------
@@ -399,9 +403,19 @@ export default function EyeCommBoard() {
         if (scanRef.current.mode === "top") {
           selectTopRow(scanRef.current.rowIndex);
         } else if (scanRef.current.mode === "emergency") {
-          selectEmergencyWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          // Back button is at rowIndex === EMERGENCY_ROWS.length
+          if (scanRef.current.rowIndex >= EMERGENCY_ROWS.length) {
+            goToTopLevel();
+          } else {
+            selectEmergencyWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          }
         } else if (scanRef.current.mode === "keyboard") {
-          selectKeyboardKey(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          // Back button is at rowIndex === KEYBOARD_ROWS.length
+          if (scanRef.current.rowIndex >= KEYBOARD_ROWS.length) {
+            goToTopLevel();
+          } else {
+            selectKeyboardKey(scanRef.current.rowIndex, scanRef.current.wordIndex);
+          }
         }
         return;
       }
@@ -472,32 +486,20 @@ export default function EyeCommBoard() {
           scanRef.current.rowStartMs = now;
         }
       } else if (s.mode === "emergency") {
+        const totalRows = EMERGENCY_ROWS.length + 1; // +1 for Back button
         if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
-          const next = (s.rowIndex + 1) % EMERGENCY_ROWS.length;
+          const next = (s.rowIndex + 1) % totalRows;
           setHighlightedRow(next);
           scanRef.current.rowIndex = next;
           scanRef.current.rowStartMs = now;
-        } else if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
-          const row = EMERGENCY_ROWS[s.rowIndex];
-          if (!row) return;
-          const next = (s.wordIndex + 1) % row.length;
-          setHighlightedWord(next);
-          scanRef.current.wordIndex = next;
-          scanRef.current.wordStartMs = now;
         }
       } else if (s.mode === "keyboard") {
+        const totalRows = KEYBOARD_ROWS.length + 1; // +1 for Back button
         if (now - s.rowStartMs >= ROW_SCAN_INTERVAL_MS) {
-          const next = (s.rowIndex + 1) % KEYBOARD_ROWS.length;
+          const next = (s.rowIndex + 1) % totalRows;
           setHighlightedRow(next);
           scanRef.current.rowIndex = next;
           scanRef.current.rowStartMs = now;
-        } else if (now - s.wordStartMs >= WORD_SCAN_INTERVAL_MS) {
-          const row = KEYBOARD_ROWS[s.rowIndex];
-          if (!row) return;
-          const next = (s.wordIndex + 1) % row.length;
-          setHighlightedWord(next);
-          scanRef.current.wordIndex = next;
-          scanRef.current.wordStartMs = now;
         }
       }
     }, 100);
@@ -801,10 +803,26 @@ export default function EyeCommBoard() {
                       ))}
                     </div>
                   ))}
-                  <div className="mt-3 pt-3 border-t border-slate-700">
+                  {/* Back button as scannable row */}
+                  <div
+                    key="back"
+                    className={`flex items-center gap-2 mb-2 ${
+                      highlightedRow === EMERGENCY_ROWS.length
+                        ? "border-2 border-[#00D4FF] bg-[#00D4FF]/20 rounded-lg p-2 shadow-[0_0_15px_rgba(0,212,255,0.4)]"
+                        : "border border-slate-700/50 rounded-lg p-2 hover:bg-slate-800/50 transition"
+                    }`}
+                  >
+                    <span className="text-xs text-slate-400 w-8 text-center">
+                      {EMERGENCY_ROWS.length + 1}.
+                    </span>
                     <button
                       onClick={goToTopLevel}
-                      className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition flex items-center justify-center gap-2"
+                      className={`w-full py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        highlightedRow === EMERGENCY_ROWS.length
+                          ? "bg-[#00D4FF] text-[#0a192f] shadow-[0_0_12px_rgba(0,212,255,0.6)] scale-105"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600/50"
+                      }`}
+                      disabled={!isScanning || scanMode !== "emergency" || highlightedRow !== EMERGENCY_ROWS.length}
                     >
                       <ArrowLeft className="h-4 w-4" />
                       <span>Back</span>
@@ -843,10 +861,26 @@ export default function EyeCommBoard() {
                       ))}
                     </div>
                   ))}
-                  <div className="mt-3 pt-3 border-t border-slate-700">
+                  {/* Back button as scannable row */}
+                  <div
+                    key="back"
+                    className={`flex items-center gap-2 mb-2 ${
+                      highlightedRow === KEYBOARD_ROWS.length
+                        ? "border-2 border-[#00D4FF] bg-[#00D4FF]/20 rounded-lg p-2 shadow-[0_0_15px_rgba(0,212,255,0.4)]"
+                        : "border border-slate-700/50 rounded-lg p-2 hover:bg-slate-800/50 transition"
+                    }`}
+                  >
+                    <span className="text-xs text-slate-400 w-8 text-center">
+                      {KEYBOARD_ROWS.length + 1}.
+                    </span>
                     <button
                       onClick={goToTopLevel}
-                      className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition flex items-center justify-center gap-2"
+                      className={`w-full py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        highlightedRow === KEYBOARD_ROWS.length
+                          ? "bg-[#00D4FF] text-[#0a192f] shadow-[0_0_12px_rgba(0,212,255,0.6)] scale-105"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600/50"
+                      }`}
+                      disabled={!isScanning || scanMode !== "keyboard" || highlightedRow !== KEYBOARD_ROWS.length}
                     >
                       <ArrowLeft className="h-4 w-4" />
                       <span>Back</span>
