@@ -63,3 +63,9 @@ yarn-error.log*
 
 # Local donor registry can contain personal contact data
 data/blood_donors.xlsx
+
+# Eye-blink communication captured images (user-generated runtime data)
+backend/data/eye_captures/
+
+# Allow frontend/src/lib/ (contains eyeComm.ts and api.ts)
+!frontend/src/lib/

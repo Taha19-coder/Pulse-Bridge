@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import Image from 'next/image';
-import { Droplets, FileText, House, Info, Stethoscope } from 'lucide-react';
+import { Droplets, Eye, FileText, House, Info, Stethoscope } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface NavbarProps {
@@ -75,6 +76,16 @@ export default function Navbar({ activeTab, setActiveTab, language, setLanguage,
                 {label}
               </motion.button>
             ))}
+            <Link href="/eye-comm" passHref legacyBehavior>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition lg:px-3.5 bg-[#183f5b] text-white shadow-md"
+              >
+                <Eye className="h-4 w-4" />
+                Eye Comm
+              </motion.button>
+            </Link>
           </motion.nav>
 
           <motion.div
@@ -132,8 +143,18 @@ export default function Navbar({ activeTab, setActiveTab, language, setLanguage,
               <Icon className="h-3.5 w-3.5" />
               {label}
             </motion.button>
-          ))}
-        </motion.nav>
+            ))}
+            <Link href="/eye-comm" passHref legacyBehavior>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-semibold transition bg-[#183f5b] text-white"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Eye Comm
+              </motion.button>
+            </Link>
+          </motion.nav>
       </motion.div>
     </header>
   );

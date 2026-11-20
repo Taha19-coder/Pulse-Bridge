@@ -150,3 +150,83 @@ export interface SystemHealthResponse {
 export interface DoctorAssistantChatResponse {
   reply: string;
 }
+
+// ------------------------------------------------------------------------------
+// Eye-blink communication types
+// ------------------------------------------------------------------------------
+export interface BlinkEventIn {
+  event_type: 'blink_start' | 'blink_end' | 'blink_complete';
+  timestamp_ms: number;
+  duration_ms?: number;
+  ear_left?: number;
+  ear_right?: number;
+}
+
+export interface BlinkEventOut {
+  event_type: string;
+  timestamp_ms: number;
+  duration_ms?: number;
+  symbol?: string;
+  composed_text: string;
+}
+
+export interface CalibrateRequest {
+  user_id: string;
+  open_ear_samples: number[];
+  closed_ear_samples: number[];
+  k?: number;
+}
+
+export interface CalibrateResponse {
+  user_id: string;
+  ear_threshold_open: number;
+  ear_threshold_closed: number;
+  open_mean: number;
+  open_std: number;
+  closed_mean: number;
+  n_open: number;
+  n_closed: number;
+}
+
+export interface EyeCommSessionResponse {
+  session_id: string;
+  user_id?: string;
+  composed_text: string;
+  created_at: string;
+  updated_at: string;
+  event_count: number;
+}
+
+export interface BlinkEventsRequest {
+  events: BlinkEventIn[];
+  user_id?: string;
+  timestamp_ms?: number;
+}
+
+export interface BlinkEventsResponse {
+  events: BlinkEventOut[];
+  session: EyeCommSessionResponse | null;
+}
+
+export interface FrameDetectRequest {
+  frame_b64: string;
+  timestamp_ms: number;
+  user_id?: string;
+}
+
+export interface EyeCaptureRequest {
+  frame_b64: string;
+  timestamp_ms: number;
+  user_id: string;
+  label?: string;
+}
+
+export interface EyeCaptureResponse {
+  capture_id: string;
+  file_path: string;
+  file_url: string;
+  user_id: string;
+  timestamp_ms: number;
+  label?: string;
+  created_at: string;
+}
