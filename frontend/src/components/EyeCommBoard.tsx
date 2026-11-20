@@ -276,13 +276,13 @@ export default function EyeCommBoard() {
       // Emergency Words
       setScanMode("emergency");
       setHighlightedRow(0);
-      setHighlightedWord(0);
+      setHighlightedWord(-1);
       scanRef.current = {
         mode: "emergency",
         rowIndex: 0,
-        wordIndex: 0,
+        wordIndex: -1,
         rowStartMs: nowMs(),
-        wordStartMs: nowMs(),
+        wordStartMs: 0,
         scanning: true,
       };
       speak("Emergency words. Blink to select a word.");
@@ -290,13 +290,13 @@ export default function EyeCommBoard() {
       // Keyboard
       setScanMode("keyboard");
       setHighlightedRow(0);
-      setHighlightedWord(0);
+      setHighlightedWord(-1);
       scanRef.current = {
         mode: "keyboard",
         rowIndex: 0,
-        wordIndex: 0,
+        wordIndex: -1,
         rowStartMs: nowMs(),
-        wordStartMs: nowMs(),
+        wordStartMs: 0,
         scanning: true,
       };
       speak("Keyboard. Blink to select a key.");
@@ -311,11 +311,11 @@ export default function EyeCommBoard() {
     setCurrentLetter("");
     // Return to row highlighting — whole line highlights again
     setScanMode("emergency");
-    setHighlightedRow(rowIdx);
+    setHighlightedRow(0);
     setHighlightedWord(-1);
     scanRef.current = {
       mode: "emergency",
-      rowIndex: rowIdx,
+      rowIndex: 0,
       wordIndex: -1,
       rowStartMs: nowMs(),
       wordStartMs: 0,
@@ -338,11 +338,11 @@ export default function EyeCommBoard() {
       setCurrentLetter("");
     } else if (key === "DONE") {
       setScanMode("keyboard");
-      setHighlightedRow(rowIdx);
+      setHighlightedRow(0);
       setHighlightedWord(-1);
       scanRef.current = {
         mode: "keyboard",
-        rowIndex: rowIdx,
+        rowIndex: 0,
         wordIndex: -1,
         rowStartMs: nowMs(),
         wordStartMs: 0,
@@ -358,11 +358,11 @@ export default function EyeCommBoard() {
 
     // Return to row highlighting — whole line highlights again
     setScanMode("keyboard");
-    setHighlightedRow(rowIdx);
+    setHighlightedRow(0);
     setHighlightedWord(-1);
     scanRef.current = {
       mode: "keyboard",
-      rowIndex: rowIdx,
+      rowIndex: 0,
       wordIndex: -1,
       rowStartMs: nowMs(),
       wordStartMs: 0,
@@ -399,8 +399,10 @@ export default function EyeCommBoard() {
         if (scanRef.current.mode === "top") {
           selectTopRow(scanRef.current.rowIndex);
         } else if (scanRef.current.mode === "emergency") {
-          // Blink on highlighted row starts word highlighting; blink on word selects it
-          if (scanRef.current.wordIndex >= 0) {
+          // Blink on Back row goes to top level
+          if (scanRef.current.rowIndex >= EMERGENCY_ROWS.length) {
+            goToTopLevel();
+          } else if (scanRef.current.wordIndex >= 0) {
             selectEmergencyWord(scanRef.current.rowIndex, scanRef.current.wordIndex);
           } else {
             // Row is highlighted — start highlighting words from index 0
@@ -410,8 +412,10 @@ export default function EyeCommBoard() {
             speak("Row selected. Blink to choose a word.");
           }
         } else if (scanRef.current.mode === "keyboard") {
-          // Blink on highlighted row starts key highlighting; blink on key selects it
-          if (scanRef.current.wordIndex >= 0) {
+          // Blink on Back row goes to top level
+          if (scanRef.current.rowIndex >= KEYBOARD_ROWS.length) {
+            goToTopLevel();
+          } else if (scanRef.current.wordIndex >= 0) {
             selectKeyboardKey(scanRef.current.rowIndex, scanRef.current.wordIndex);
           } else {
             // Row is highlighted — start highlighting keys from index 0
@@ -437,6 +441,7 @@ export default function EyeCommBoard() {
       selectTopRow,
       selectEmergencyWord,
       selectKeyboardKey,
+      goToTopLevel,
       speakText,
     ],
   );
