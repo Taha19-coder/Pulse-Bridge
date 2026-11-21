@@ -27,12 +27,6 @@ Built with **Next.js, FastAPI, Python, and Supabase**, Pulse Bridge brings toget
 - Uses structured retrieval and semantic search techniques.
 - Provides grounded recommendations from the available doctor dataset.
 
-### 🩸 Emergency Blood Donor Matching
-- Search for compatible blood donors.
-- Match donors using blood group compatibility.
-- Prioritize donors based on location and availability.
-- Support emergency blood request workflows.
-- Protect donor contact information through privacy-conscious handling.
 
 ### 👁️ Eye-Blink Communication
 - Assistive communication interface designed for users with limited mobility.
